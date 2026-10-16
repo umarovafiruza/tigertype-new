@@ -1,5 +1,9 @@
 # 🐯 TigerType
 
+<p align="center">
+  <img src="assets/logo.png" width="100" alt="TigerType Logo" style="border-radius: 50%;">
+</p>
+
 > **Apple Minimalist Monkeytype + TypeRacer Hybrid Web Application**  
 > *Built with Pure Vanilla JavaScript (ES Modules), Modern CSS, Web Audio API, and PeerJS (WebRTC).*
 

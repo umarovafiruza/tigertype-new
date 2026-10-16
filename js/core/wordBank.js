@@ -21,7 +21,7 @@ export class WordBank {
    * @param {number} count 
    * @param {number|null} seed - Optional PRNG seed for deterministic multiplayer sync
    */
-  static generateWords(languageId = "english", count = 30, seed = null) {
+  static generateWords(languageId = "uzbek", count = 30, seed = null, options = {}) {
     const list = this.getList(languageId);
     const result = [];
 
@@ -35,11 +35,34 @@ export class WordBank {
 
     let prevWord = "";
     for (let i = 0; i < count; i++) {
+      if (options.numbers && random() < 0.15) {
+        const num = Math.floor(random() * 1000).toString();
+        result.push(num);
+        prevWord = num;
+        continue;
+      }
+
       let word;
       do {
         const index = Math.floor(random() * list.length);
         word = list[index];
       } while (word === prevWord && list.length > 1);
+
+      if (options.punctuation) {
+        const puncRand = random();
+        if (puncRand < 0.15) {
+          word = word.charAt(0).toUpperCase() + word.slice(1);
+        }
+        if (puncRand < 0.08) {
+          word = word + ",";
+        } else if (puncRand < 0.14) {
+          word = word + ".";
+        } else if (puncRand < 0.18) {
+          word = word + "?";
+        } else if (puncRand < 0.20) {
+          word = '"' + word + '"';
+        }
+      }
 
       result.push(word);
       prevWord = word;

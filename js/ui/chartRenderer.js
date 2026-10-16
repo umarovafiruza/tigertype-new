@@ -19,16 +19,36 @@ export class SpeedChart {
     // High-DPI crisp rendering
     const dpr = window.devicePixelRatio || 1;
     const rect = this.canvas.getBoundingClientRect();
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.height * dpr;
+    const width = rect.width > 100 ? rect.width : (this.canvas.parentElement?.clientWidth || 640);
+    const height = rect.height > 50 ? rect.height : 220;
+
+    this.canvas.width = width * dpr;
+    this.canvas.height = height * dpr;
     this.ctx.scale(dpr, dpr);
 
-    const width = rect.width;
-    const height = rect.height;
     const padding = { top: 20, right: 25, bottom: 30, left: 45 };
+    const plotWidth = Math.max(10, width - padding.left - padding.right);
+    const plotHeight = Math.max(10, height - padding.top - padding.bottom);
 
-    const plotWidth = width - padding.left - padding.right;
-    const plotHeight = height - padding.top - padding.bottom;
+    // Resolve active theme colors dynamically
+    const styles = window.getComputedStyle(document.documentElement);
+    const accentColor = styles.getPropertyValue('--accent-gold').trim() || '#e5a93b';
+    const textLabelColor = styles.getPropertyValue('--text-secondary').trim() || '#86868b';
+    const gridLineColor = styles.getPropertyValue('--bg-glass-border').trim() || 'rgba(128, 128, 128, 0.15)';
+    const errorColor = styles.getPropertyValue('--char-incorrect').trim() || '#ff453a';
+
+    // Helper for gradient alpha calculation
+    const getRgba = (color, alpha) => {
+      if (color.startsWith('#')) {
+        let hex = color.slice(1);
+        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+        const num = parseInt(hex, 16);
+        if (!isNaN(num)) {
+          return `rgba(${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}, ${alpha})`;
+        }
+      }
+      return color;
+    };
 
     // Calculate axis bounds
     const maxSpeed = Math.max(60, Math.ceil((Math.max(...speedTimeline) + 15) / 20) * 20);
@@ -39,7 +59,7 @@ export class SpeedChart {
     // 1. Draw horizontal gridlines & labels
     const gridSteps = 4;
     this.ctx.font = '11px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
-    this.ctx.fillStyle = '#86868b';
+    this.ctx.fillStyle = textLabelColor;
     this.ctx.textAlign = 'right';
     this.ctx.textBaseline = 'middle';
 
@@ -47,7 +67,7 @@ export class SpeedChart {
       const yVal = Math.round((maxSpeed / gridSteps) * i);
       const y = padding.top + plotHeight - (yVal / maxSpeed) * plotHeight;
 
-      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+      this.ctx.strokeStyle = gridLineColor;
       this.ctx.lineWidth = 1;
       this.ctx.beginPath();
       this.ctx.moveTo(padding.left, y);
@@ -68,8 +88,8 @@ export class SpeedChart {
 
     // 3. Draw gradient area under the curve
     const gradient = this.ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
-    gradient.addColorStop(0, 'rgba(229, 169, 59, 0.35)');
-    gradient.addColorStop(1, 'rgba(229, 169, 59, 0.0)');
+    gradient.addColorStop(0, getRgba(accentColor, 0.32));
+    gradient.addColorStop(1, getRgba(accentColor, 0.0));
 
     this.ctx.beginPath();
     this.ctx.moveTo(padding.left, height - padding.bottom);
@@ -107,7 +127,7 @@ export class SpeedChart {
         this.ctx.bezierCurveTo(cx, prev.y, cx, pt.y, pt.x, pt.y);
       }
     });
-    this.ctx.strokeStyle = '#e5a93b';
+    this.ctx.strokeStyle = accentColor;
     this.ctx.lineWidth = 2.5;
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
@@ -118,7 +138,7 @@ export class SpeedChart {
       errorTimeline.forEach((errCount, idx) => {
         if (errCount > 0 && points[idx]) {
           const pt = points[idx];
-          this.ctx.fillStyle = '#ff453a';
+          this.ctx.fillStyle = errorColor;
           this.ctx.beginPath();
           this.ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
           this.ctx.fill();

@@ -1,120 +1,97 @@
-/* Results Modal (Post-Test Summary & Analytics) */
+/* ==========================================================================
+   Results Modal (Minimalist Analytics)
+   ========================================================================== */
 .results-card {
-  max-width: 780px !important;
-}
-
-.results-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.results-headline {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.results-headline h2 {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  color: var(--text-primary);
-}
-
-.results-headline p {
-  font-size: 13px;
-  color: var(--text-secondary);
+  max-width: 720px !important;
 }
 
 .pb-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(229, 169, 59, 0.15);
-  border: 1px solid rgba(229, 169, 59, 0.3);
-  color: var(--accent-gold);
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 600;
-  padding: 4px 10px;
-  border-radius: var(--radius-full);
+  color: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  text-transform: lowercase;
 }
 
 /* Primary Stat Big Numbers */
-.stats-hero-grid {
+.stats-hero-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 24px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
-.stat-hero-box {
+.stat-hero-cell {
   background: var(--bg-primary);
-  border: 1px solid var(--bg-glass-border);
-  border-radius: var(--radius-md);
-  padding: 20px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
 }
 
-.stat-hero-box .label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-secondary);
-  margin-bottom: 6px;
+.stat-hero-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: lowercase;
+  margin-bottom: 4px;
 }
 
-.stat-hero-box .value {
+.stat-hero-num {
   font-family: var(--font-mono);
-  font-size: 52px;
-  font-weight: 800;
+  font-size: 48px;
+  font-weight: 700;
   line-height: 1;
   color: var(--accent-gold);
 }
 
-/* Secondary Stats Row */
-.stats-detail-grid {
+/* Secondary Metrics Grid */
+.stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
 }
 
-.stat-mini-box {
+.stat-cell {
   background: var(--bg-primary);
-  border: 1px solid var(--bg-glass-border);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  padding: 12px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
 }
 
-.stat-mini-box .mini-label {
-  font-size: 11px;
-  color: var(--text-secondary);
+.cell-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: lowercase;
   margin-bottom: 4px;
 }
 
-.stat-mini-box .mini-val {
+.cell-val {
   font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
-/* Canvas Speed Chart */
-.chart-container {
+/* Chart Container */
+.chart-box {
   width: 100%;
   height: 180px;
   background: var(--bg-primary);
-  border: 1px solid var(--bg-glass-border);
-  border-radius: var(--radius-md);
-  margin-bottom: 24px;
-  position: relative;
-  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   padding: 12px;
+  margin-bottom: 20px;
 }
 
 #speed-chart {
@@ -123,10 +100,19 @@
   display: block;
 }
 
-/* Results Actions */
-.results-actions {
+/* Modal Footer Actions */
+.modal-footer-actions {
   display: flex;
-  align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
+}
+
+@media (max-width: 600px) {
+  .stats-hero-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }

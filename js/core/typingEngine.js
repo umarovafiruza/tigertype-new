@@ -29,15 +29,17 @@ export class TypingEngine {
     this.onWordFinish = null;
     this.onFinish = null;
 
-    this.baseLineHeight = 46;
+    this.baseLineHeight = 52;
+    this.lastTargetScroll = 0;
   }
 
   /**
    * Initializes words and builds the DOM elements
    * @param {Array<string>} words 
    */
-  loadWords(words) {
-    this.words = words;
+  loadWords(words, mode = "time") {
+    this.words = [...words];
+    this.mode = mode;
     this.wordIndex = 0;
     this.charIndex = 0;
     this.totalTypedChars = 0;
@@ -48,13 +50,29 @@ export class TypingEngine {
     this.isStarted = false;
     this.isFinished = false;
 
-    this.container.innerHTML = "";
     this.container.scrollTop = 0;
+    this.lastTargetScroll = 0;
     this.wordElements = [];
+
+    // Reset caret renderer state
+    if (this.caretRenderer) {
+      this.caretRenderer.reset();
+    }
+
+    // Retain or create Caret inside words-container so it scrolls naturally
+    let caretEl = this.container.querySelector("#caret");
+    this.container.replaceChildren();
+    if (!caretEl) {
+      caretEl = document.createElement("div");
+      caretEl.id = "caret";
+      caretEl.className = "blink";
+    }
+    this.container.appendChild(caretEl);
+    this.caretRenderer.setCaretElement(caretEl);
 
     const fragment = document.createDocumentFragment();
 
-    words.forEach((wordText) => {
+    this.words.forEach((wordText) => {
       const wordSpan = document.createElement("span");
       wordSpan.className = "word";
 
@@ -76,6 +94,29 @@ export class TypingEngine {
       this.updateCaret();
       this.caretRenderer.show();
     });
+  }
+
+  appendWords(moreWords) {
+    if (!moreWords || !moreWords.length) return;
+    this.words.push(...moreWords);
+    const fragment = document.createDocumentFragment();
+
+    moreWords.forEach((wordText) => {
+      const wordSpan = document.createElement("span");
+      wordSpan.className = "word";
+
+      for (let i = 0; i < wordText.length; i++) {
+        const charSpan = document.createElement("span");
+        charSpan.className = "char";
+        charSpan.textContent = wordText[i];
+        wordSpan.appendChild(charSpan);
+      }
+
+      fragment.appendChild(wordSpan);
+      this.wordElements.push(wordSpan);
+    });
+
+    this.container.appendChild(fragment);
   }
 
   handleKeyDown(event) {
@@ -124,6 +165,7 @@ export class TypingEngine {
 
     const targetWord = this.words[this.wordIndex];
     this.totalTypedChars++;
+    let isError = false;
 
     if (this.charIndex < targetWord.length) {
       const charEl = currentWordEl.children[this.charIndex];
@@ -136,6 +178,7 @@ export class TypingEngine {
         charEl.className = "char incorrect";
         this.incorrectChars++;
         this.totalErrorsMade++;
+        isError = true;
       }
       this.charIndex++;
     } else {
@@ -148,23 +191,25 @@ export class TypingEngine {
         this.charIndex++;
         this.extraChars++;
         this.totalErrorsMade++;
+        isError = true;
       }
     }
 
     this.updateCaret();
-    this.checkLineScroll();
 
     if (this.onKeystroke) {
       this.onKeystroke({
         totalTyped: this.totalTypedChars,
         correct: this.correctChars,
         incorrect: this.incorrectChars + this.extraChars,
-        progress: this.getProgress()
+        progress: this.getProgress(),
+        isError: isError,
+        errorCount: isError ? 1 : 0
       });
     }
 
-    // Check if entire text completed
-    if (this.wordIndex === this.words.length - 1 && this.charIndex >= targetWord.length) {
+    // Check if entire text completed (in words mode)
+    if (this.mode === "words" && this.wordIndex === this.words.length - 1 && this.charIndex >= targetWord.length) {
       this.finish();
     }
   }
@@ -179,19 +224,41 @@ export class TypingEngine {
     if (this.charIndex === 0) return;
 
     this.totalTypedChars++;
+    let errorsAdded = 0;
 
-    // Mark remaining un-typed characters in the word as incorrect
-    for (let i = this.charIndex; i < targetWord.length; i++) {
-      const charEl = currentWordEl.children[i];
-      if (charEl && !charEl.classList.contains("correct") && !charEl.classList.contains("incorrect")) {
-        charEl.className = "char incorrect";
-        this.incorrectChars++;
-        this.totalErrorsMade++;
+    // Mark remaining un-typed characters in the word as incorrect/missed
+    if (this.charIndex < targetWord.length) {
+      for (let i = this.charIndex; i < targetWord.length; i++) {
+        const charEl = currentWordEl.children[i];
+        if (charEl && !charEl.classList.contains("correct") && !charEl.classList.contains("incorrect")) {
+          charEl.className = "char incorrect";
+          this.incorrectChars++;
+          this.totalErrorsMade++;
+          errorsAdded++;
+        }
       }
     }
 
+    // Standard Typing Metric: If the word was completed without uncorrected errors,
+    // the space is a valid, correctly typed separator character!
+    const hasWordErrors = currentWordEl.querySelector(".incorrect, .extra");
+    if (!hasWordErrors) {
+      this.correctChars++;
+    }
+
     if (this.onWordFinish) {
-      this.onWordFinish(this.wordIndex);
+      this.onWordFinish(this.wordIndex, this.words.length);
+    }
+
+    if (this.onKeystroke) {
+      this.onKeystroke({
+        totalTyped: this.totalTypedChars,
+        correct: this.correctChars,
+        incorrect: this.incorrectChars + this.extraChars,
+        progress: this.getProgress(),
+        isError: errorsAdded > 0,
+        errorCount: errorsAdded
+      });
     }
 
     // Move to next word
@@ -200,17 +267,10 @@ export class TypingEngine {
       this.charIndex = 0;
       this.updateCaret();
       this.checkLineScroll();
-
-      if (this.onKeystroke) {
-        this.onKeystroke({
-          totalTyped: this.totalTypedChars,
-          correct: this.correctChars,
-          incorrect: this.incorrectChars + this.extraChars,
-          progress: this.getProgress()
-        });
-      }
     } else {
-      this.finish();
+      if (this.mode === "words") {
+        this.finish();
+      }
     }
   }
 
@@ -243,6 +303,15 @@ export class TypingEngine {
         this.updateCaret();
         this.checkLineScroll();
       }
+    }
+
+    if (this.onKeystroke) {
+      this.onKeystroke({
+        totalTyped: this.totalTypedChars,
+        correct: this.correctChars,
+        incorrect: this.incorrectChars + this.extraChars,
+        progress: this.getProgress()
+      });
     }
   }
 
@@ -292,15 +361,16 @@ export class TypingEngine {
     if (!currentWordEl) return;
 
     const currentOffsetTop = currentWordEl.offsetTop;
-    // If word offset exceeds 1 line height, smooth scroll down
-    if (currentOffsetTop > this.baseLineHeight) {
+    // Calculate target scroll position (1 line above current active word)
+    const targetScroll = currentOffsetTop > this.baseLineHeight
+      ? currentOffsetTop - this.baseLineHeight
+      : 0;
+
+    // Only initiate smooth scroll if the line boundary actually shifted
+    if (this.lastTargetScroll !== targetScroll) {
+      this.lastTargetScroll = targetScroll;
       this.container.scrollTo({
-        top: currentOffsetTop - this.baseLineHeight,
-        behavior: "smooth"
-      });
-    } else if (currentOffsetTop === 0 && this.container.scrollTop > 0) {
-      this.container.scrollTo({
-        top: 0,
+        top: targetScroll,
         behavior: "smooth"
       });
     }

@@ -3,12 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TigerType — Apple Minimalist Typing & Race</title>
+  <title>TigerType — Minimalist Typing & Race</title>
+  <link rel="icon" type="image/png" href="assets/logo.png">
+  <link rel="apple-touch-icon" href="assets/logo.png">
   
-  <!-- Fonts -->
+  <!-- Premium Monospace & Sans Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Stylesheets -->
   <link rel="stylesheet" href="css/variables.css">    
@@ -18,170 +20,166 @@
   <link rel="stylesheet" href="css/race-track.css">
   <link rel="stylesheet" href="css/results-modal.css">
 
-  <!-- PeerJS for Zero-Server WebRTC Multiplayer -->
+  <!-- Theme Initializer -->
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem("tigertype_prefs_v1");
+        if (saved) {
+          var theme = JSON.parse(saved).theme;
+          if (theme) document.documentElement.setAttribute("data-theme", theme);
+        }
+      } catch (e) {}
+    })();
+  </script>
+
+  <!-- PeerJS for WebRTC Multiplayer -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
   <div class="app-container">
     
-    <!-- Top Navigation Header -->
+    <!-- Minimalist Architectural Header -->
     <header class="app-header">
-      <div class="brand" id="brand-logo">
-        <div class="brand-icon">⚡</div>
-        <div class="brand-title">tiger<span>type</span></div>
+      <div class="header-left">
+        <div class="brand" id="brand-logo" title="Bosh sahifa">
+          <img src="assets/logo.png" alt="TigerType" class="brand-logo-img">
+          <span class="brand-name">tigertype</span>
+        </div>
       </div>
 
-      <div class="header-actions">
-        <!-- Sound switch toggle -->
-        <button class="icon-btn" id="sound-toggle-btn" title="Klaviatura ovozi profili">
-          <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-          <span id="sound-label">Clicky Blue</span>
+      <nav class="header-nav">
+        <button class="nav-btn" id="open-race-btn">poyga</button>
+        <button class="nav-btn" id="open-history-btn">tarix</button>
+        <button class="nav-btn" id="sound-toggle-btn">ovoz: blue</button>
+        <button class="nav-btn" id="theme-toggle-btn">
+          <span id="theme-label">noir charcoal</span>
+          <span id="theme-icon" style="display:none;"></span>
         </button>
-
-        <!-- Multiplayer / Race Mode button -->
-        <button class="icon-btn" id="open-race-btn" title="Poyga rejimi (Multiplayer / AI Bot)">
-          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
-          <span>Poyga (Race)</span>
-        </button>
-
-        <!-- History Modal button -->
-        <button class="icon-btn" id="open-history-btn" title="Natijalar tarixi">
-          <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
-          <span>Tarix</span>
-        </button>
-      </div>
+      </nav>
     </header>
 
-    <!-- Controls Selector Pill (Monkeytype style) -->
-    <section class="controls-container">
-      <div class="controls-pill">
-        
-        <!-- Language Group -->
-        <div class="control-group" id="lang-selector">
-          <button class="pill-option active" data-lang="english">english</button>
-          <button class="pill-option" data-lang="uzbek">o'zbek</button>
-          <button class="pill-option" data-lang="code">code syntax</button>
-        </div>
-
-        <div class="control-divider"></div>
-
-        <!-- Mode Group: Time or Words -->
-        <div class="control-group" id="mode-type-selector">
-          <button class="pill-option active" data-mode-type="time">vaqt</button>
-          <button class="pill-option" data-mode-type="words">so'zlar</button>
-        </div>
-
-        <div class="control-divider"></div>
-
-        <!-- Mode Values Group (15, 30, 60 or 10, 25, 50, 100) -->
-        <div class="control-group" id="mode-val-selector">
-          <button class="pill-option" data-val="15">15</button>
-          <button class="pill-option active" data-val="30">30</button>
-          <button class="pill-option" data-val="60">60</button>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- Real-Time Race Track (Hidden in Solo mode, Visible in PvP/Bot race) -->
-    <section class="race-container" id="race-tracks-section">
-      <div class="room-status-bar">
-        <div>
-          Rejim: <strong id="race-mode-label" style="color: var(--text-primary);">Do'st bilan poyga</strong> 
-          <span class="room-badge" id="race-room-code-tag"></span>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="copy-room-btn" id="copy-room-link-btn">Havolani nusxalash</button>
-          <button class="copy-room-btn" id="leave-race-btn" style="color: var(--accent-red);">Chiqish</button>
-        </div>
-      </div>
-
-      <!-- Player 1 Track (You) -->
-      <div class="race-track" id="player-track">
-        <div class="track-progress-fill" id="player-track-fill"></div>
-        <div class="racer-info">
-          <div class="racer-avatar">⚡</div>
-          <span class="racer-name" id="player-name-display">Siz</span>
-        </div>
-        <div class="track-lane">
-          <div class="racer-runner" id="player-runner" style="left: 0%;">
-            <span class="racer-icon">🏎️</span>
-            <span class="racer-speed" id="player-live-wpm">0 WPM</span>
-          </div>
-        </div>
-        <div class="track-finish-line">🏁</div>
-      </div>
-
-      <!-- Player 2 / AI Bot Track -->
-      <div class="race-track" id="opponent-track">
-        <div class="track-progress-fill" id="opponent-track-fill"></div>
-        <div class="racer-info">
-          <div class="racer-avatar" id="opponent-avatar">🤖</div>
-          <span class="racer-name" id="opponent-name-display">Raqib</span>
-        </div>
-        <div class="track-lane">
-          <div class="racer-runner" id="opponent-runner" style="left: 0%;">
-            <span class="racer-icon" id="opponent-runner-icon">🚗</span>
-            <span class="racer-speed" id="opponent-live-wpm">0 WPM</span>
-          </div>
-        </div>
-        <div class="track-finish-line">🏁</div>
-      </div>
-    </section>
-
-    <!-- Live Heads-Up Display (HUD) -->
-    <section class="live-hud" id="live-hud">
-      <div class="hud-stat">
-        <span class="hud-val" id="hud-timer">30</span>
-        <span class="hud-label" id="hud-timer-label">sekund</span>
-      </div>
-
-      <div class="hud-stat">
-        <span class="hud-val" id="hud-wpm">0</span>
-        <span class="hud-label">wpm</span>
-      </div>
-
-      <div class="hud-stat">
-        <span class="hud-val" id="hud-acc">100%</span>
-        <span class="hud-label">aniqlik</span>
-      </div>
-    </section>
-
-    <!-- Typing Main Container -->
-    <main class="typing-wrapper" id="typing-wrapper" tabindex="0">
-      <input type="text" id="typing-input" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <!-- Main Content Area -->
+    <div class="main-content">
       
-      <!-- Caret -->
-      <div id="caret" class="blink"></div>
+      <!-- Typographic Controls Strip -->
+      <section class="controls-container">
+        <div class="controls-strip">
+          <div class="strip-group">
+            <button class="strip-item pill-option" id="btn-toggle-punc">punctuation</button>
+            <button class="strip-item pill-option" id="btn-toggle-num">numbers</button>
+          </div>
 
-      <!-- Words view (3 lines) -->
-      <div class="words-container" id="words-container">
-        <!-- Rendered dynamically -->
+          <span class="strip-sep">/</span>
+
+          <div class="strip-group" id="mode-type-selector">
+            <button class="strip-item pill-option active" data-mode-type="time">time</button>
+            <button class="strip-item pill-option" data-mode-type="words">words</button>
+            <button class="strip-item pill-option" data-mode-type="quote">quote</button>
+            <button class="strip-item pill-option" data-mode-type="zen">zen</button>
+            <button class="strip-item pill-option" data-mode-type="custom">custom</button>
+          </div>
+
+          <span class="strip-sep">/</span>
+
+          <div class="strip-group" id="mode-val-selector">
+            <button class="strip-item pill-option" data-val="15">15</button>
+            <button class="strip-item pill-option active" data-val="30">30</button>
+            <button class="strip-item pill-option" data-val="60">60</button>
+            <button class="strip-item pill-option" data-val="120">120</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Precision Telemetry Race Track (Visible only in race mode) -->
+      <section class="race-container" id="race-tracks-section">
+        <div class="race-header-bar">
+          <div class="race-status-tag">
+            <span class="meta-dim">rejim:</span>
+            <span id="race-mode-label" class="meta-bright">do'st bilan poyga</span>
+            <span class="room-code-tag" id="race-room-code-tag"></span>
+          </div>
+          <div class="race-actions">
+            <button class="subtle-action-btn" id="copy-room-link-btn">havolani nusxalash</button>
+            <button class="subtle-action-btn btn-danger" id="leave-race-btn">chiqish</button>
+          </div>
+        </div>
+
+        <!-- Player 1 Telemetry Lane -->
+        <div class="race-telemetry-lane" id="player-track">
+          <div class="telemetry-meta">
+            <span class="racer-label" id="player-name-display">siz</span>
+            <span class="racer-speed" id="player-live-wpm">0 wpm</span>
+          </div>
+          <div class="telemetry-bar-wrap">
+            <div class="telemetry-fill" id="player-track-fill"></div>
+            <div class="telemetry-needle" id="player-runner" style="left: 0%;"></div>
+          </div>
+        </div>
+
+        <!-- Opponent Telemetry Lane -->
+        <div class="race-telemetry-lane" id="opponent-track">
+          <div class="telemetry-meta">
+            <span class="racer-label" id="opponent-name-display">raqib</span>
+            <span class="racer-speed" id="opponent-live-wpm">0 wpm</span>
+            <span id="opponent-avatar" style="display:none;"></span>
+            <span id="opponent-runner-icon" style="display:none;"></span>
+          </div>
+          <div class="telemetry-bar-wrap">
+            <div class="telemetry-fill" id="opponent-track-fill"></div>
+            <div class="telemetry-needle" id="opponent-runner" style="left: 0%;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Language Selector -->
+      <div class="lang-row">
+        <button class="lang-btn" id="lang-indicator-btn" title="Tilni almashtirish">
+          <span class="lang-tag">til:</span>
+          <span id="lang-display-name">uzbek</span>
+        </button>
       </div>
 
-      <!-- Focus overlay -->
-      <div class="focus-warning" id="focus-warning">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-        <span>Yozishni boshlash uchun bosing yoki tugmani bosing</span>
-      </div>
-    </main>
+      <!-- Live Heads-Up Display -->
+      <section class="live-hud" id="live-hud">
+        <span class="hud-digit" id="hud-timer">30</span>
+        <span id="hud-wpm" style="display: none;">0</span>
+        <span id="hud-acc" style="display: none;">100%</span>
+      </section>
 
-    <!-- Restart bar -->
-    <div class="restart-bar">
-      <button class="restart-btn" id="restart-test-btn" title="Qaytadan boshlash (Tab + Enter)">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-        <span>Qayta boshlash</span>
-      </button>
+      <!-- Typing Container -->
+      <main class="typing-wrapper" id="typing-wrapper" tabindex="0">
+        <input type="text" id="typing-input" autocomplete="off" autocapitalize="off" spellcheck="false">
+        
+        <!-- Words View -->
+        <div class="words-container" id="words-container">
+          <div id="caret" class="blink"></div>
+        </div>
+
+        <!-- Focus Overlay -->
+        <div class="focus-warning" id="focus-warning">
+          <span>yozishni boshlash uchun bu yerga bosing</span>
+        </div>
+      </main>
+
+      <!-- Restart Bar -->
+      <div class="restart-bar">
+        <button class="restart-pill" id="restart-test-btn" title="Qaytadan boshlash (Tab)">
+          qaytadan boshlash
+        </button>
+        <div class="restart-kbd-notice">
+          <kbd>tab</kbd> qaytadan boshlash
+        </div>
+      </div>
+
     </div>
 
     <!-- Minimalist Footer -->
     <footer class="app-footer">
-      <div class="keyboard-shortcut">
-        <span class="kbd">tab</span> + <span class="kbd">enter</span> qayta boshlash
-      </div>
-      <div>
-        TigerType &bull; Apple Minimalist &bull; WebRTC Zero-Server
-      </div>
+      <button class="footer-theme-btn" id="footer-theme-btn" title="Mavzuni almashtirish">
+        <span class="footer-theme-prefix">mavzu:</span>
+        <span id="footer-theme-label">noir charcoal</span>
+      </button>
     </footer>
 
   </div>
@@ -190,132 +188,188 @@
 
   <!-- Results Summary Modal -->
   <div class="modal-overlay" id="results-modal">
-    <div class="modal-card results-card glass-panel">
-      <div class="results-header">
-        <div class="results-headline">
-          <h2>Sinov yakunlandi</h2>
-          <p id="res-mode-detail">30s &bull; English</p>
+    <div class="modal-card results-card">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title">sinov natijasi</h3>
+          <p class="modal-sub" id="res-mode-detail">30s &bull; UZBEK</p>
         </div>
         <div id="res-pb-badge" class="pb-badge" style="display: none;">
-          👑 Yangi Shaxsiy Rekord!
+          yangi rekord
         </div>
         <button class="modal-close-btn">&times;</button>
       </div>
 
-      <!-- Primary Big Stats -->
-      <div class="stats-hero-grid">
-        <div class="stat-hero-box">
-          <span class="label">Net Tezlik (WPM)</span>
-          <span class="value" id="res-net-wpm">0</span>
+      <!-- Hero WPM & Acc -->
+      <div class="stats-hero-row">
+        <div class="stat-hero-cell">
+          <span class="stat-hero-label">wpm</span>
+          <span class="stat-hero-num" id="res-net-wpm">0</span>
         </div>
-        <div class="stat-hero-box">
-          <span class="label">Aniqlik</span>
-          <span class="value" id="res-acc" style="color: var(--text-primary);">100%</span>
-        </div>
-      </div>
-
-      <!-- Secondary Breakdown -->
-      <div class="stats-detail-grid">
-        <div class="stat-mini-box">
-          <span class="mini-label">Gross WPM</span>
-          <span class="mini-val" id="res-gross-wpm">0</span>
-        </div>
-        <div class="stat-mini-box">
-          <span class="mini-label">CPM</span>
-          <span class="mini-val" id="res-cpm">0</span>
-        </div>
-        <div class="stat-mini-box">
-          <span class="mini-label">Barqarorlik</span>
-          <span class="mini-val" id="res-consistency">100%</span>
-        </div>
-        <div class="stat-mini-box">
-          <span class="mini-label">Xatolar</span>
-          <span class="mini-val" id="res-errors" style="color: var(--accent-red);">0</span>
+        <div class="stat-hero-cell">
+          <span class="stat-hero-label">aniqlik</span>
+          <span class="stat-hero-num" id="res-acc">100%</span>
         </div>
       </div>
 
-      <!-- Dynamic Canvas Chart -->
-      <div class="chart-container">
+      <!-- Detail Grid -->
+      <div class="stats-grid">
+        <div class="stat-cell">
+          <span class="cell-label">gross wpm</span>
+          <span class="cell-val" id="res-gross-wpm">0</span>
+        </div>
+        <div class="stat-cell">
+          <span class="cell-label">cpm</span>
+          <span class="cell-val" id="res-cpm">0</span>
+        </div>
+        <div class="stat-cell">
+          <span class="cell-label">barqarorlik</span>
+          <span class="cell-val" id="res-consistency">100%</span>
+        </div>
+        <div class="stat-cell">
+          <span class="cell-label">xatolar</span>
+          <span class="cell-val text-danger" id="res-errors">0</span>
+        </div>
+        <div class="stat-cell">
+          <span class="cell-label">vaqt</span>
+          <span class="cell-val" id="res-time">0s</span>
+        </div>
+      </div>
+
+      <!-- Canvas Chart -->
+      <div class="chart-box">
         <canvas id="speed-chart"></canvas>
       </div>
 
       <!-- Actions -->
-      <div class="results-actions">
-        <button class="secondary-btn modal-backdrop-close">Yopish</button>
-        <button class="primary-btn" id="res-next-btn">
-          Keyingi mashq (Tab + Enter)
-        </button>
+      <div class="modal-footer-actions">
+        <button class="btn-ghost modal-backdrop-close">yopish</button>
+        <button class="btn-solid" id="res-next-btn">keyingi mashq (tab)</button>
       </div>
     </div>
   </div>
 
   <!-- Multiplayer & AI Bot Modal -->
   <div class="modal-overlay" id="multiplayer-modal">
-    <div class="modal-card glass-panel">
+    <div class="modal-card">
       <div class="modal-header">
-        <h3 class="modal-title">Poyga Rejimi (Race Mode)</h3>
+        <h3 class="modal-title">poyga rejimi</h3>
         <button class="modal-close-btn">&times;</button>
       </div>
 
+      <!-- Segmented Tabs -->
+      <div class="tab-strip" id="multiplayer-tabs">
+        <button class="tab-item active modal-tab-btn" data-tab-target="tab-pvp">do'st bilan (pvp)</button>
+        <button class="tab-item modal-tab-btn" data-tab-target="tab-bot">ai poygachi</button>
+      </div>
+
       <div class="modal-body">
-        <!-- Tab 1: AI Bot Solo Race -->
-        <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--bg-glass-border);">
-          <h4 style="font-size: 14px; margin-bottom: 8px; color: var(--text-primary);">🤖 Sun'iy Intellekt (AI Bot) bilan poyga</h4>
-          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">Do'stingiz kutmasdan darhol bot tezligini tanlab poygalashing:</p>
-          
-          <div style="display: flex; gap: 8px; margin-bottom: 12px;" id="bot-speed-pills">
-            <button class="pill-option" data-bot-wpm="30">30 WPM</button>
-            <button class="pill-option active" data-bot-wpm="60">60 WPM</button>
-            <button class="pill-option" data-bot-wpm="85">85 WPM</button>
-            <button class="pill-option" data-bot-wpm="110">110 WPM</button>
+        <!-- Tab 1: PvP -->
+        <div id="tab-pvp" class="modal-tab-pane active">
+          <div class="minimal-box">
+            <h4 class="box-heading">yangi xona ochish</h4>
+            <p class="box-text">Do'stingiz bilan real-vaqtda poygalashish uchun xona yarating va havolani ulashing.</p>
+            <button class="btn-solid" id="create-room-btn" style="width: 100%;">xona yaratish</button>
           </div>
 
-          <button class="primary-btn" id="start-bot-race-btn" style="width: 100%;">
-            Bot bilan poygani boshlash
-          </button>
-        </div>
+          <div class="minimal-divider">yoki</div>
 
-        <div style="text-align: center; color: var(--text-tertiary); font-size: 12px; margin: 4px 0;">YOKI</div>
-
-        <!-- Tab 2: Create or Join WebRTC Room -->
-        <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--bg-glass-border);">
-          <h4 style="font-size: 14px; margin-bottom: 8px; color: var(--text-primary);">⚡ Do'st bilan real-vaqt PvP</h4>
-          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">Xona yarating yoki do'stingiz bergan kod bilan kiring:</p>
-
-          <div style="display: flex; flex-direction: column; gap: 10px;">
-            <button class="secondary-btn" id="create-room-btn">
-              Yangi shaxsiy xona yaratish
-            </button>
-            
-            <div style="display: flex; gap: 8px;">
-              <input type="text" id="join-room-input" class="input-field" placeholder="Xona kodi (masalan: tiger-abc123)">
-              <button class="primary-btn" id="join-room-btn" style="white-space: nowrap;">Ulanish</button>
+          <div class="minimal-box">
+            <h4 class="box-heading">xona kodi bilan kirish</h4>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <input type="text" id="join-room-input" class="clean-input" placeholder="xona kodi (masalan: tiger-abc123)">
+              <button class="btn-ghost" id="join-room-btn" style="white-space: nowrap;">kirish</button>
             </div>
           </div>
         </div>
 
+        <!-- Tab 2: AI Bot -->
+        <div id="tab-bot" class="modal-tab-pane">
+          <div class="minimal-box">
+            <h4 class="box-heading">ai poygachi tezligini tanlang</h4>
+            <div class="bot-speed-selector" id="bot-speed-pills">
+              <button class="bot-speed-card" data-bot-wpm="30">
+                <span class="speed-val">30</span>
+                <span class="speed-unit">wpm</span>
+                <span class="speed-title">boshlovchi</span>
+              </button>
+              <button class="bot-speed-card active" data-bot-wpm="60">
+                <span class="speed-val">60</span>
+                <span class="speed-unit">wpm</span>
+                <span class="speed-title">o'rtacha</span>
+              </button>
+              <button class="bot-speed-card" data-bot-wpm="85">
+                <span class="speed-val">85</span>
+                <span class="speed-unit">wpm</span>
+                <span class="speed-title">tezkor</span>
+              </button>
+              <button class="bot-speed-card" data-bot-wpm="110">
+                <span class="speed-val">110</span>
+                <span class="speed-unit">wpm</span>
+                <span class="speed-title">pro</span>
+              </button>
+            </div>
+            <button class="btn-solid" id="start-bot-race-btn" style="width: 100%; margin-top: 14px;">poygani boshlash</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Room Lobby Modal -->
+  <div class="modal-overlay" id="room-lobby-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">shaxsiy xona</h3>
+        <button class="modal-close-btn" id="close-lobby-btn">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="minimal-box">
+          <span class="meta-dim" style="font-size: 11px; text-transform: uppercase;">xona kodi</span>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+            <span class="code-highlight" id="lobby-room-code">tiger-123456</span>
+            <button class="btn-ghost" id="lobby-copy-code-btn" style="padding: 6px 12px; font-size: 12px;">nusxalash</button>
+          </div>
+        </div>
+
+        <div class="minimal-box">
+          <span class="meta-dim" style="font-size: 11px; text-transform: uppercase;">to'g'ridan-to'g'ri havola</span>
+          <div style="display: flex; gap: 8px; margin-top: 4px;">
+            <input type="text" id="lobby-room-link-input" class="clean-input" readonly>
+            <button class="btn-ghost" id="lobby-copy-link-btn" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">nusxalash</button>
+          </div>
+        </div>
+
+        <div class="status-strip" id="lobby-status-box">
+          <span id="lobby-status-text">raqib ulanishi kutilmoqda...</span>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+          <button class="btn-ghost text-danger" id="lobby-cancel-btn">xonani yopish</button>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- History Modal -->
   <div class="modal-overlay" id="history-modal">
-    <div class="modal-card glass-panel" style="max-width: 650px;">
+    <div class="modal-card" style="max-width: 620px;">
       <div class="modal-header">
-        <h3 class="modal-title">Natijalar Tarixi (Mahalliy)</h3>
+        <h3 class="modal-title">natijalar tarixi</h3>
         <button class="modal-close-btn">&times;</button>
       </div>
 
       <div class="modal-body">
-        <div style="max-height: 380px; overflow-y: auto;">
-          <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+        <div style="max-height: 360px; overflow-y: auto;">
+          <table class="minimal-table">
             <thead>
-              <tr style="border-bottom: 1px solid var(--bg-glass-border); color: var(--text-secondary);">
-                <th style="padding: 10px 8px;">WPM</th>
-                <th style="padding: 10px 8px;">Aniqlik</th>
-                <th style="padding: 10px 8px;">Rejim</th>
-                <th style="padding: 10px 8px;">Til</th>
-                <th style="padding: 10px 8px;">Vaqt</th>
+              <tr>
+                <th>wpm</th>
+                <th>aniqlik</th>
+                <th>rejim</th>
+                <th>til</th>
+                <th>sana</th>
               </tr>
             </thead>
             <tbody id="history-table-body">
@@ -325,14 +379,14 @@
         </div>
 
         <div style="display: flex; justify-content: space-between; margin-top: 14px;">
-          <button class="secondary-btn" id="export-history-btn" style="font-size: 12px; padding: 8px 14px;">Eksport JSON</button>
-          <button class="secondary-btn modal-backdrop-close" style="font-size: 12px; padding: 8px 14px;">Yopish</button>
+          <button class="btn-ghost" id="export-history-btn" style="font-size: 12px;">eksport json</button>
+          <button class="btn-ghost modal-backdrop-close" style="font-size: 12px;">yopish</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Main JavaScript App Entry (ES Modules) -->
+  <!-- Main JavaScript App Entry -->
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

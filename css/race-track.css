@@ -1,8 +1,10 @@
-/* Race Track Container (TypeRacer Hybrid mode) */
+/* ==========================================================================
+   Precision Telemetry Race Track (Non-AI, Minimalist)
+   ========================================================================== */
 .race-container {
   width: 100%;
   max-width: 900px;
-  margin: 0 auto 28px;
+  margin: 0 auto 24px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -14,137 +16,122 @@
 
 .race-container.active {
   opacity: 1;
-  max-height: 400px;
-  margin-bottom: 28px;
+  max-height: 300px;
+  margin-bottom: 24px;
 }
 
-.race-track {
-  position: relative;
-  width: 100%;
-  height: 48px;
-  background: var(--bg-surface);
-  border: 1px solid var(--bg-glass-border);
-  border-radius: var(--radius-md);
+.race-header-bar {
   display: flex;
   align-items: center;
-  padding: 0 16px;
-  overflow: hidden;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 8px;
 }
 
-.track-progress-fill {
+.race-status-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.meta-dim {
+  color: var(--text-tertiary);
+}
+
+.meta-bright {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.room-code-tag {
+  color: var(--accent-gold);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.race-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.subtle-action-btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.subtle-action-btn:hover {
+  color: var(--text-primary);
+}
+
+.btn-danger:hover {
+  color: var(--accent-red);
+}
+
+/* Telemetry Lanes */
+.race-telemetry-lane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.telemetry-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.racer-label {
+  color: var(--text-primary);
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.racer-speed {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.telemetry-bar-wrap {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: var(--bg-primary);
+  border-radius: 2px;
+  overflow: visible;
+}
+
+.telemetry-fill {
   position: absolute;
   top: 0;
   left: 0;
   bottom: 0;
-  background: linear-gradient(90deg, rgba(229, 169, 59, 0.08) 0%, rgba(229, 169, 59, 0.18) 100%);
-  border-right: 2px solid var(--accent-gold);
+  background: var(--accent-gold);
+  border-radius: 2px;
   width: 0%;
-  transition: width 120ms linear;
-  pointer-events: none;
+  transition: width 100ms linear;
 }
 
-.racer-info {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  z-index: 2;
-  width: 180px;
-  flex-shrink: 0;
-}
-
-.racer-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface-elevated);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-}
-
-.racer-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.track-lane {
-  position: relative;
-  flex-grow: 1;
-  height: 100%;
-  margin: 0 16px;
-}
-
-.racer-runner {
+.telemetry-needle {
   position: absolute;
-  top: 50%;
-  left: 0%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: left 120ms linear;
-  z-index: 3;
-}
-
-.racer-icon {
-  font-size: 20px;
-  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
-}
-
-.racer-speed {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--bg-glass-border);
-  color: var(--accent-gold);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-}
-
-.track-finish-line {
-  position: relative;
-  font-size: 18px;
-  z-index: 2;
-  opacity: 0.7;
-}
-
-/* Room Status banner */
-.room-status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  background: var(--bg-surface);
-  border: 1px solid var(--bg-glass-border);
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.room-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--accent-gold);
-  font-weight: 600;
-  font-family: var(--font-mono);
-}
-
-.copy-room-btn {
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface-elevated);
-  color: var(--text-primary);
-}
-
-.copy-room-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
+  top: -4px;
+  width: 2px;
+  height: 12px;
+  background: var(--text-primary);
+  border-radius: 1px;
+  transform: translateX(-50%);
+  transition: left 100ms linear;
 }

@@ -5,7 +5,7 @@ import { WordBank } from "./core/wordBank.js";
 import { TypingEngine } from "./core/typingEngine.js";
 import { SoundEngine } from "./audio/soundEngine.js";
 import { CaretRenderer } from "./ui/caretRenderer.js";
-import { ModalManager } from "./ui/modalManager.js";
+import { ModalManager, Toast } from "./ui/modalManager.js";
 import { StorageManager } from "./storage/storage.js";
 import { BotRacer } from "./multiplayer/botRacer.js";
 import { PeerManager } from "./multiplayer/peerManager.js";
@@ -18,9 +18,12 @@ class TigerTypeApp {
     // State
     this.mode = CONFIG.DEFAULT_MODE; // "time" | "words"
     this.modeValue = CONFIG.DEFAULT_TIME; // 30
-    this.language = CONFIG.DEFAULT_LANGUAGE; // "english"
+    this.language = CONFIG.DEFAULT_LANGUAGE; // "uzbek"
     this.currentSwitch = CONFIG.DEFAULT_SWITCH; // "blue"
     this.botSpeed = CONFIG.DEFAULT_BOT_WPM; // 65
+    this.currentTheme = CONFIG.DEFAULT_THEME; // "dark-graphite"
+    this.hasPunctuation = false;
+    this.hasNumbers = false;
     this.isRaceMode = false;
     this.raceOpponentType = "none"; // "none" | "bot" | "peer"
 
@@ -74,6 +77,7 @@ class TigerTypeApp {
     this._setupMultiplayerCallbacks();
     this._checkURLParamsForRoom();
     this.resetTest();
+    this.typingInput.focus();
   }
 
   _loadSavedPreferences() {
@@ -83,25 +87,58 @@ class TigerTypeApp {
       if (prefs.mode) this.mode = prefs.mode;
       if (prefs.modeValue) this.modeValue = prefs.modeValue;
       if (prefs.currentSwitch) this.currentSwitch = prefs.currentSwitch;
+      if (prefs.theme) this.currentTheme = prefs.theme;
+      if (prefs.hasPunctuation !== undefined) this.hasPunctuation = prefs.hasPunctuation;
+      if (prefs.hasNumbers !== undefined) this.hasNumbers = prefs.hasNumbers;
     }
 
+    this._applyTheme(this.currentTheme, false);
     this.soundEngine.setProfile(this.currentSwitch);
     this._updateSoundButtonUI();
     this._updateControlPillsUI();
+    this._updateLanguageUI();
   }
 
   _bindDOMEvents() {
     // Focus management
     const focusInput = () => {
+      if (document.querySelector(".modal-overlay.active")) return;
       this.typingInput.focus();
       this.typingWrapper.classList.remove("unfocused");
     };
 
+    this.modals.onClose = () => {
+      focusInput();
+    };
+
+    // Clicking anywhere outside header/controls/footer focuses typing area
     window.addEventListener("click", (e) => {
-      if (!e.target.closest(".modal-card") && !e.target.closest(".app-header") && !e.target.closest(".controls-container")) {
+      if (document.querySelector(".modal-overlay.active")) return;
+      if (!e.target.closest(".app-header") && !e.target.closest(".controls-container") && !e.target.closest(".app-footer") && !e.target.closest(".restart-bar")) {
         focusInput();
       }
     });
+
+    // Explicit typing wrapper & focus warning click handlers
+    this.typingWrapper.addEventListener("click", () => {
+      focusInput();
+    });
+
+    const focusWarning = document.getElementById("focus-warning");
+    if (focusWarning) {
+      focusWarning.addEventListener("click", () => {
+        focusInput();
+      });
+    }
+
+    // Brand logo click
+    const brandLogo = document.getElementById("brand-logo");
+    if (brandLogo) {
+      brandLogo.addEventListener("click", () => {
+        this.resetTest();
+        focusInput();
+      });
+    }
 
     this.typingInput.addEventListener("blur", () => {
       this.typingWrapper.classList.add("unfocused");
@@ -111,38 +148,100 @@ class TigerTypeApp {
       this.typingWrapper.classList.remove("unfocused");
     });
 
-    // Keystrokes
+    // Keystrokes on typingInput
     this.typingInput.addEventListener("keydown", (e) => {
       this.typingEngine.handleKeyDown(e);
     });
 
-    // Global keyboard shortcuts (Tab + Enter for quick restart)
+    // Global keyboard handling & seamless auto-focus capture
     window.addEventListener("keydown", (e) => {
+      const resultsActive = document.getElementById("results-modal")?.classList.contains("active");
+      if (resultsActive && (e.key === "Tab" || e.key === "Enter")) {
+        e.preventDefault();
+        this.modals.closeAll();
+        this.resetTest();
+        focusInput();
+        return;
+      }
+
+      if (document.querySelector(".modal-overlay.active")) {
+        return;
+      }
+
       if (e.key === "Tab") {
         e.preventDefault();
         this.resetTest();
         focusInput();
+        return;
+      }
+
+      // Seamless typing auto-capture:
+      // If typingInput is blurred and user presses a printable character, space, or backspace,
+      // instantly restore focus and dispatch keydown directly so no keystroke is ever dropped!
+      if (document.activeElement !== this.typingInput) {
+        if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) {
+          return;
+        }
+        if (e.ctrlKey || e.metaKey || e.altKey) {
+          return;
+        }
+        if (e.key.length === 1 || e.key === "Backspace") {
+          focusInput();
+          this.typingEngine.handleKeyDown(e);
+          e.preventDefault();
+        }
       }
     });
 
-    // Language pills
-    document.querySelectorAll("#lang-selector .pill-option").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll("#lang-selector .pill-option").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        this.language = btn.dataset.lang;
+    // Punctuation toggle button
+    const puncBtn = document.getElementById("btn-toggle-punc");
+    if (puncBtn) {
+      puncBtn.addEventListener("click", () => {
+        this.hasPunctuation = !this.hasPunctuation;
+        puncBtn.classList.toggle("active", this.hasPunctuation);
         this._savePrefs();
         this.resetTest();
         focusInput();
       });
-    });
+    }
 
-    // Mode Type pills (Time / Words)
+    // Numbers toggle button
+    const numBtn = document.getElementById("btn-toggle-num");
+    if (numBtn) {
+      numBtn.addEventListener("click", () => {
+        this.hasNumbers = !this.hasNumbers;
+        numBtn.classList.toggle("active", this.hasNumbers);
+        this._savePrefs();
+        this.resetTest();
+        focusInput();
+      });
+    }
+
+    // Language indicator button (Monkeytype style, above words)
+    const langBtn = document.getElementById("lang-indicator-btn");
+    if (langBtn) {
+      langBtn.addEventListener("click", () => {
+        const langs = ["uzbek", "english", "code"];
+        const nextIdx = (langs.indexOf(this.language) + 1) % langs.length;
+        this.language = langs[nextIdx];
+        this._updateLanguageUI();
+        this._savePrefs();
+        this.resetTest();
+        focusInput();
+      });
+    }
+
+    // Mode Type pills (Time / Words / Quote / Zen / Custom)
     document.querySelectorAll("#mode-type-selector .pill-option").forEach((btn) => {
       btn.addEventListener("click", () => {
         document.querySelectorAll("#mode-type-selector .pill-option").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
-        this.mode = btn.dataset.modeType;
+        const chosenMode = btn.dataset.modeType;
+        if (chosenMode === "time" || chosenMode === "words") {
+          this.mode = chosenMode;
+        } else {
+          this.mode = "words";
+        }
         this._updateModeValuesPillOptions();
         this._savePrefs();
         this.resetTest();
@@ -150,7 +249,7 @@ class TigerTypeApp {
       });
     });
 
-    // Mode Value pills (15, 30, 60 or 10, 25, 50, 100)
+    // Mode Value pills (15, 30, 60, 120 or 10, 25, 50, 100)
     document.getElementById("mode-val-selector").addEventListener("click", (e) => {
       const btn = e.target.closest(".pill-option");
       if (!btn) return;
@@ -162,8 +261,36 @@ class TigerTypeApp {
       focusInput();
     });
 
+    // Auto-unlock Web Audio on first user interaction (click, keydown, pointer)
+    const unlockAudio = () => {
+      this.soundEngine.init();
+      this.soundEngine.resume();
+      window.removeEventListener("keydown", unlockAudio);
+      window.removeEventListener("pointerdown", unlockAudio);
+    };
+    window.addEventListener("keydown", unlockAudio, { passive: true });
+    window.addEventListener("pointerdown", unlockAudio, { passive: true });
+
+    // Theme switch toggle (cycles through 4 themes)
+    const cycleTheme = () => {
+      const themes = CONFIG.THEMES;
+      const currentIndex = themes.findIndex(t => t.id === this.currentTheme);
+      const nextIndex = (currentIndex + 1) % themes.length;
+      const nextTheme = themes[nextIndex];
+      this._applyTheme(nextTheme.id);
+      this._savePrefs();
+    };
+
+    const themeBtn = document.getElementById("theme-toggle-btn");
+    if (themeBtn) themeBtn.addEventListener("click", cycleTheme);
+
+    const footerThemeBtn = document.getElementById("footer-theme-btn");
+    if (footerThemeBtn) footerThemeBtn.addEventListener("click", cycleTheme);
+
     // Switch sound toggle
     document.getElementById("sound-toggle-btn").addEventListener("click", () => {
+      this.soundEngine.init();
+      this.soundEngine.resume();
       const order = ["blue", "red", "brown", "off"];
       const nextIndex = (order.indexOf(this.currentSwitch) + 1) % order.length;
       this.currentSwitch = order[nextIndex];
@@ -171,7 +298,9 @@ class TigerTypeApp {
       this._updateSoundButtonUI();
       this._savePrefs();
       // Test sound preview
-      this.soundEngine.playKeystroke("a");
+      if (this.currentSwitch !== "off") {
+        this.soundEngine.playKeystroke("a");
+      }
     });
 
     // Restart button
@@ -208,10 +337,10 @@ class TigerTypeApp {
       dlAnchor.remove();
     });
 
-    // Bot speed buttons in modal
-    document.querySelectorAll("#bot-speed-pills .pill-option").forEach((btn) => {
+    // Bot speed selection cards in modal
+    document.querySelectorAll("#bot-speed-pills .bot-speed-card, #bot-speed-pills .pill-option").forEach((btn) => {
       btn.addEventListener("click", () => {
-        document.querySelectorAll("#bot-speed-pills .pill-option").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll("#bot-speed-pills .bot-speed-card, #bot-speed-pills .pill-option").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
         this.botSpeed = parseInt(btn.dataset.botWpm, 10);
         this.botRacer.setSpeed(this.botSpeed);
@@ -231,13 +360,11 @@ class TigerTypeApp {
       focusInput();
     });
 
-    // Copy room link
+    // Copy room link on race track
     document.getElementById("copy-room-link-btn").addEventListener("click", () => {
       if (this.peerManager.roomId) {
         const url = `${window.location.origin}${window.location.pathname}?room=${this.peerManager.roomId}`;
-        navigator.clipboard.writeText(url).then(() => {
-          alert("Xona havolasi nusxalandi: " + url);
-        });
+        navigator.clipboard.writeText(url);
       }
     });
 
@@ -246,14 +373,67 @@ class TigerTypeApp {
       this.createPeerRoom();
     });
 
-    // Join room button
-    document.getElementById("join-room-btn").addEventListener("click", () => {
-      const input = document.getElementById("join-room-input");
-      const code = input.value.trim();
-      if (code) {
-        this.joinPeerRoom(code);
+    // Join room button & Enter key
+    const joinInput = document.getElementById("join-room-input");
+    const doJoin = () => {
+      if (joinInput) {
+        this.joinPeerRoom(joinInput.value.trim());
       }
-    });
+    };
+
+    document.getElementById("join-room-btn").addEventListener("click", doJoin);
+    if (joinInput) {
+      joinInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          doJoin();
+        }
+      });
+    }
+
+    // Lobby: Copy Code button
+    const lobbyCopyCodeBtn = document.getElementById("lobby-copy-code-btn");
+    if (lobbyCopyCodeBtn) {
+      lobbyCopyCodeBtn.addEventListener("click", () => {
+        if (this.peerManager.roomId) {
+          navigator.clipboard.writeText(this.peerManager.roomId).then(() => {
+            lobbyCopyCodeBtn.textContent = "nusxalandi";
+            setTimeout(() => {
+              lobbyCopyCodeBtn.textContent = "nusxalash";
+            }, 2000);
+          });
+        }
+      });
+    }
+
+    // Lobby: Copy Link button
+    const lobbyCopyLinkBtn = document.getElementById("lobby-copy-link-btn");
+    if (lobbyCopyLinkBtn) {
+      lobbyCopyLinkBtn.addEventListener("click", () => {
+        const linkInput = document.getElementById("lobby-room-link-input");
+        if (linkInput && linkInput.value) {
+          navigator.clipboard.writeText(linkInput.value).then(() => {
+            lobbyCopyLinkBtn.textContent = "nusxalandi";
+            setTimeout(() => {
+              lobbyCopyLinkBtn.textContent = "nusxalash";
+            }, 2000);
+          });
+        }
+      });
+    }
+
+    // Lobby: Cancel / Close buttons
+    const cancelLobby = () => {
+      this.leaveRace();
+      this.modals.closeAll();
+      focusInput();
+    };
+
+    const lobbyCancelBtn = document.getElementById("lobby-cancel-btn");
+    if (lobbyCancelBtn) lobbyCancelBtn.addEventListener("click", cancelLobby);
+
+    const closeLobbyBtn = document.getElementById("close-lobby-btn");
+    if (closeLobbyBtn) closeLobbyBtn.addEventListener("click", cancelLobby);
 
     // Window resize recalculates caret
     window.addEventListener("resize", () => {
@@ -263,6 +443,7 @@ class TigerTypeApp {
 
   _setupTypingEngineCallbacks() {
     this.typingEngine.onStart = () => {
+      document.querySelector(".app-container")?.classList.add("typing-active");
       this.speedTimeline = [];
       this.errorTimeline = [];
       this.errorsThisSecond = 0;
@@ -271,16 +452,18 @@ class TigerTypeApp {
       
       this.timer.start(
         duration,
-        // On tick (frame update for smooth countdown / time elapsed)
+        // On tick (frame update: only update timer text when integer second changes)
         (displayVal, elapsedSec) => {
-          this.hudTimer.textContent = displayVal;
-          this._updateLiveMetrics(elapsedSec);
+          if (this._lastTimerDisplay !== displayVal) {
+            this._lastTimerDisplay = displayVal;
+            this.hudTimer.textContent = displayVal;
+          }
         },
         // On second sample (for Canvas Chart)
         (sec, elapsedSec) => {
+          this._updateLiveMetrics(elapsedSec);
           const liveWpm = Metrics.getNetWPM(
-            this.typingEngine.totalTypedChars,
-            this.typingEngine.incorrectChars + this.typingEngine.extraChars,
+            this.typingEngine.correctChars,
             elapsedSec
           );
           this.speedTimeline.push(liveWpm);
@@ -299,17 +482,27 @@ class TigerTypeApp {
       }
     };
 
+    this.typingEngine.onWordFinish = (wordIndex, totalWords) => {
+      // In time mode, replenish words continuously so words never run out
+      if (this.mode === "time" && wordIndex >= totalWords - 8) {
+        const more = WordBank.generateWords(this.language, 25, null, {
+          punctuation: this.hasPunctuation,
+          numbers: this.hasNumbers
+        });
+        this.typingEngine.appendWords(more);
+      }
+    };
+
     this.typingEngine.onKeystroke = (info) => {
-      if (this.typingEngine.totalErrorsMade > 0) {
-        this.errorsThisSecond++;
+      if (info && info.isError) {
+        this.errorsThisSecond += (info.errorCount || 1);
       }
       this._updateLiveMetrics(this.timer.getElapsedSeconds());
 
       // Sync progress in race mode
       if (this.isRaceMode) {
         const liveWpm = Metrics.getNetWPM(
-          this.typingEngine.totalTypedChars,
-          this.typingEngine.incorrectChars + this.typingEngine.extraChars,
+          this.typingEngine.correctChars,
           this.timer.getElapsedSeconds()
         );
         this._updatePlayerTrack(info.progress, liveWpm);
@@ -321,15 +514,20 @@ class TigerTypeApp {
     };
 
     this.typingEngine.onFinish = (summary) => {
+      document.querySelector(".app-container")?.classList.remove("typing-active");
       this.timer.stop();
       if (this.isRaceMode && this.raceOpponentType === "bot") {
         this.botRacer.stop();
       }
 
       const elapsed = this.timer.getElapsedSeconds();
-      const grossWpm = Metrics.getGrossWPM(summary.totalTyped, elapsed);
-      const netWpm = Metrics.getNetWPM(summary.totalTyped, summary.incorrect, elapsed);
-      const accuracy = Metrics.getAccuracy(summary.correct, summary.totalTyped);
+      // Gross WPM measures total physical typing output
+      const grossWpm = Metrics.getGrossWPM(summary.correct + summary.incorrect, elapsed);
+      // Net WPM only counts accurately completed characters (letters + spaces)
+      const netWpm = Metrics.getNetWPM(summary.correct, elapsed);
+      // Accuracy = correct / (correct + totalErrorsMade) * 100
+      const accuracy = Metrics.getAccuracy(summary.correct, summary.totalErrors);
+      // CPM = correct characters per minute = netWpm * 5
       const cpm = Metrics.getCPM(summary.correct, elapsed);
       const consistency = Metrics.getConsistency(this.speedTimeline);
 
@@ -363,6 +561,10 @@ class TigerTypeApp {
       this._updateOpponentTrack(data.progress, data.liveWpm);
     };
 
+    this.botRacer.onFinish = (data) => {
+      this._updateOpponentTrack(1, data.finalWpm);
+    };
+
     this.peerManager.onPeerReady = (id) => {
       this.raceRoomCodeTag.textContent = `#${id}`;
     };
@@ -371,10 +573,16 @@ class TigerTypeApp {
       this.raceOpponentType = "peer";
       this.isRaceMode = true;
       this.raceSection.classList.add("active");
-      this.opponentNameDisplay.textContent = info.name || "Do'stingiz";
-      this.opponentAvatar.textContent = "⚡";
-      this.raceModeLabel.textContent = "Do'st bilan poyga";
-      this.modals.closeAll();
+      this.opponentNameDisplay.textContent = info.name || "raqib";
+      if (this.opponentAvatar) this.opponentAvatar.textContent = "";
+      this.raceModeLabel.textContent = "do'st bilan poyga";
+
+      this.modals.updateLobbyConnected(info.name || "do'stingiz");
+
+      setTimeout(() => {
+        this.modals.closeAll();
+        this.typingInput.focus();
+      }, 1000);
 
       if (info.isHost) {
         // Generate seed and send to guest
@@ -402,8 +610,11 @@ class TigerTypeApp {
       this._updateOpponentTrack(data.progress, data.liveWpm);
     };
 
+    this.peerManager.onRemoteFinish = (data) => {
+      this._updateOpponentTrack(1, data.finalWpm);
+    };
+
     this.peerManager.onDisconnected = () => {
-      alert("Raqib aloqasi uzildi.");
       this.leaveRace();
     };
   }
@@ -412,10 +623,10 @@ class TigerTypeApp {
     this.isRaceMode = true;
     this.raceOpponentType = "bot";
     this.raceSection.classList.add("active");
-    this.raceModeLabel.textContent = `AI Bot Poygasi (${this.botSpeed} WPM)`;
+    this.raceModeLabel.textContent = `ai poygasi (${this.botSpeed} wpm)`;
     this.raceRoomCodeTag.textContent = "";
-    this.opponentNameDisplay.textContent = `TigerBot (${this.botSpeed} WPM)`;
-    this.opponentAvatar.textContent = "🤖";
+    this.opponentNameDisplay.textContent = `tigerbot (${this.botSpeed} wpm)`;
+    if (this.opponentAvatar) this.opponentAvatar.textContent = "";
     this.resetTest();
   }
 
@@ -435,18 +646,38 @@ class TigerTypeApp {
       this.raceSection.classList.add("active");
       this.raceModeLabel.textContent = "Xona kutilmoqda...";
       this.raceRoomCodeTag.textContent = `#${roomId}`;
-      this.modals.closeAll();
-      alert(`Xona yaratildi! Havola yoki xona kodi orqali do'stingizni taklif qiling:\n${roomId}`);
+
+      const fullUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+      this.modals.showRoomLobby(roomId, fullUrl);
     }).catch(err => {
-      alert("Peer serverga ulanishda xatolik: " + err.message);
+      console.warn("Xona yaratishda xatolik:", err);
     });
   }
 
   joinPeerRoom(code) {
-    this.peerManager.joinRoom(code).then(() => {
+    if (!code) {
+      const input = document.getElementById("join-room-input");
+      if (input) input.focus();
+      return;
+    }
+
+    let cleanCode = code.trim();
+    if (cleanCode.startsWith("#")) cleanCode = cleanCode.slice(1);
+    if (cleanCode.includes("room=")) {
+      try {
+        const url = new URL(cleanCode, window.location.origin);
+        cleanCode = url.searchParams.get("room") || cleanCode;
+      } catch (e) {
+        const match = cleanCode.match(/room=([^&]+)/);
+        if (match) cleanCode = match[1];
+      }
+    }
+
+    this.peerManager.joinRoom(cleanCode).then(() => {
       this.modals.closeAll();
+      this.typingInput.focus();
     }).catch(err => {
-      alert("Xonaga ulanib bo'lmadi: " + err.message);
+      console.warn("Xonaga ulanib bo'lmadi:", err);
     });
   }
 
@@ -461,6 +692,7 @@ class TigerTypeApp {
   }
 
   resetTest(seed = null) {
+    document.querySelector(".app-container")?.classList.remove("typing-active");
     this.timer.stop();
     this.botRacer.stop();
 
@@ -473,14 +705,25 @@ class TigerTypeApp {
       wordCount = Math.max(40, Math.ceil(this.modeValue * 2.5));
     }
 
-    const words = WordBank.generateWords(this.language, wordCount, seed);
-    this.typingEngine.loadWords(words);
+    const words = WordBank.generateWords(this.language, wordCount, seed, {
+      punctuation: this.hasPunctuation,
+      numbers: this.hasNumbers
+    });
+    this.typingEngine.loadWords(words, this.mode);
 
     // Reset HUD
-    this.hudTimer.textContent = this.mode === "time" ? this.modeValue : "0";
-    this.hudTimerLabel.textContent = this.mode === "time" ? "sekund" : "soniya";
-    this.hudWpm.textContent = "0";
-    this.hudAcc.textContent = "100%";
+    this._lastTimerDisplay = null;
+    this._lastWpm = null;
+    this._lastAcc = null;
+
+    if (this.hudTimer) {
+      this.hudTimer.textContent = this.mode === "time" ? this.modeValue : "0";
+    }
+    if (this.hudTimerLabel) {
+      this.hudTimerLabel.textContent = this.mode === "time" ? "sekund" : "soniya";
+    }
+    if (this.hudWpm) this.hudWpm.textContent = "0";
+    if (this.hudAcc) this.hudAcc.textContent = "100%";
 
     // Reset Race tracks
     this._updatePlayerTrack(0, 0);
@@ -491,44 +734,49 @@ class TigerTypeApp {
 
   _updateLiveMetrics(elapsedSec) {
     const netWpm = Metrics.getNetWPM(
-      this.typingEngine.totalTypedChars,
-      this.typingEngine.incorrectChars + this.typingEngine.extraChars,
+      this.typingEngine.correctChars,
       elapsedSec
     );
     const accuracy = Metrics.getAccuracy(
       this.typingEngine.correctChars,
-      this.typingEngine.totalTypedChars
+      this.typingEngine.totalErrorsMade
     );
 
-    this.hudWpm.textContent = netWpm;
-    this.hudAcc.textContent = `${accuracy}%`;
+    if (this._lastWpm !== netWpm) {
+      this._lastWpm = netWpm;
+      this.hudWpm.textContent = netWpm;
+    }
+    const accStr = `${accuracy}%`;
+    if (this._lastAcc !== accStr) {
+      this._lastAcc = accStr;
+      this.hudAcc.textContent = accStr;
+    }
   }
 
   _updatePlayerTrack(progress, liveWpm) {
     const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
     this.playerTrackFill.style.width = `${pct}%`;
     this.playerRunner.style.left = `${pct}%`;
-    this.playerLiveWpm.textContent = `${liveWpm} WPM`;
+    this.playerLiveWpm.textContent = `${liveWpm} wpm`;
   }
 
   _updateOpponentTrack(progress, liveWpm) {
     const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
     this.opponentTrackFill.style.width = `${pct}%`;
     this.opponentRunner.style.left = `${pct}%`;
-    this.opponentLiveWpm.textContent = `${liveWpm} WPM`;
+    this.opponentLiveWpm.textContent = `${liveWpm} wpm`;
   }
 
   _updateSoundButtonUI() {
     const profiles = {
-      blue: "Clicky Blue",
-      red: "Linear Red",
-      brown: "Tactile Brown",
-      off: "Ovoz O'chiq"
+      blue: "ovoz: blue",
+      red: "ovoz: red",
+      brown: "ovoz: brown",
+      off: "ovoz: o'chiq"
     };
-    const label = document.getElementById("sound-label");
     const btn = document.getElementById("sound-toggle-btn");
-    if (label) label.textContent = profiles[this.currentSwitch] || "Ovoz";
     if (btn) {
+      btn.textContent = profiles[this.currentSwitch] || "ovoz";
       if (this.currentSwitch === "off") {
         btn.classList.remove("active");
         btn.style.opacity = "0.5";
@@ -540,10 +788,15 @@ class TigerTypeApp {
   }
 
   _updateControlPillsUI() {
+    // Punctuation and Numbers toggles
+    const puncBtn = document.getElementById("btn-toggle-punc");
+    if (puncBtn) puncBtn.classList.toggle("active", !!this.hasPunctuation);
+
+    const numBtn = document.getElementById("btn-toggle-num");
+    if (numBtn) numBtn.classList.toggle("active", !!this.hasNumbers);
+
     // Language
-    document.querySelectorAll("#lang-selector .pill-option").forEach((b) => {
-      b.classList.toggle("active", b.dataset.lang === this.language);
-    });
+    this._updateLanguageUI();
 
     // Mode
     document.querySelectorAll("#mode-type-selector .pill-option").forEach((b) => {
@@ -551,6 +804,13 @@ class TigerTypeApp {
     });
 
     this._updateModeValuesPillOptions();
+  }
+
+  _updateLanguageUI() {
+    const langDisplay = document.getElementById("lang-display-name");
+    if (langDisplay) {
+      langDisplay.textContent = this.language;
+    }
   }
 
   _updateModeValuesPillOptions() {
@@ -572,12 +832,41 @@ class TigerTypeApp {
     });
   }
 
+  _applyTheme(themeId) {
+    const theme = CONFIG.THEMES.find(t => t.id === themeId) || CONFIG.THEMES[0];
+    this.currentTheme = theme.id;
+    document.documentElement.setAttribute("data-theme", this.currentTheme);
+    this._updateThemeButtonUI();
+
+    // Recalculate caret metrics if words are rendered
+    if (this.caretRenderer) {
+      this.caretRenderer.recalculate();
+    }
+
+    // If results chart modal is currently active, re-render chart with new palette
+    const resultsModal = document.getElementById("results-modal");
+    if (resultsModal && resultsModal.classList.contains("active") && this.modals?.chart && this.speedTimeline.length) {
+      this.modals.chart.render(this.speedTimeline, this.errorTimeline);
+    }
+  }
+
+  _updateThemeButtonUI() {
+    const label = document.getElementById("theme-label");
+    const footerLabel = document.getElementById("footer-theme-label");
+    const current = CONFIG.THEMES.find(t => t.id === this.currentTheme) || CONFIG.THEMES[0];
+    if (label) label.textContent = current.label;
+    if (footerLabel) footerLabel.textContent = current.label;
+  }
+
   _savePrefs() {
     StorageManager.savePreferences({
       language: this.language,
       mode: this.mode,
       modeValue: this.modeValue,
-      currentSwitch: this.currentSwitch
+      currentSwitch: this.currentSwitch,
+      theme: this.currentTheme,
+      hasPunctuation: this.hasPunctuation,
+      hasNumbers: this.hasNumbers
     });
   }
 }

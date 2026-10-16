@@ -1,12 +1,13 @@
 /**
- * High-accuracy typing calculation metrics conforming to standard typing speed rules.
- * Rule: 1 word = 5 keystrokes.
+ * High-accuracy typing calculation metrics conforming to standard typing speed rules (Monkeytype standard).
+ * Standard: 1 word = 5 characters (including spaces).
  */
 
 export class Metrics {
   /**
-   * Calculate Gross Words Per Minute
-   * @param {number} totalChars - Total keystrokes typed
+   * Calculate Gross Words Per Minute (Raw WPM)
+   * Counts every typed character (correct, incorrect, extra, spaces)
+   * @param {number} totalChars - Total characters typed
    * @param {number} timeInSeconds - Elapsed time in seconds
    */
   static getGrossWPM(totalChars, timeInSeconds) {
@@ -16,20 +17,35 @@ export class Metrics {
   }
 
   /**
-   * Calculate Net Words Per Minute
-   * @param {number} totalChars - Total keystrokes typed
-   * @param {number} uncorrectedErrors - Number of incorrect characters at finish
-   * @param {number} timeInSeconds - Elapsed time in seconds
+   * Calculate Net Words Per Minute conforming to standard typing speed rules.
+   * Net WPM only counts accurately typed characters (letters + valid spaces).
+   * Supports either (correctChars, timeInSeconds) or (totalChars, uncorrectedErrors, timeInSeconds).
+   * @param {number} correctCharsOrTotal - Number of correct characters, or total characters
+   * @param {number} errorsOrTime - Uncorrected errors (if 3 args) or time in seconds (if 2 args)
+   * @param {number} [optionalTime] - Time in seconds (if 3 args)
    */
-  static getNetWPM(totalChars, uncorrectedErrors, timeInSeconds) {
-    if (timeInSeconds <= 0 || totalChars <= 0) return 0;
+  static getNetWPM(correctCharsOrTotal, errorsOrTime, optionalTime) {
+    let correctChars = 0;
+    let timeInSeconds = 0;
+
+    if (optionalTime !== undefined) {
+      // 3 arguments: (totalChars, uncorrectedErrors, timeInSeconds)
+      correctChars = Math.max(0, correctCharsOrTotal - errorsOrTime);
+      timeInSeconds = optionalTime;
+    } else {
+      // 2 arguments: (correctChars, timeInSeconds)
+      correctChars = Math.max(0, correctCharsOrTotal);
+      timeInSeconds = errorsOrTime;
+    }
+
+    if (timeInSeconds <= 0 || correctChars <= 0) return 0;
     const minutes = timeInSeconds / 60;
-    const netChars = Math.max(0, totalChars - uncorrectedErrors);
-    return Math.round((netChars / 5) / minutes);
+    return Math.round((correctChars / 5) / minutes);
   }
 
   /**
    * Calculate Characters Per Minute (CPM)
+   * Standard typing definition: CPM = (correctChars / minutes) = Net WPM * 5
    * @param {number} correctChars 
    * @param {number} timeInSeconds 
    */
@@ -40,13 +56,26 @@ export class Metrics {
   }
 
   /**
-   * Calculate Accuracy Percentage
-   * @param {number} correctChars 
-   * @param {number} totalTypedChars 
+   * Calculate Accuracy Percentage conforming to standard typing metrics (Monkeytype):
+   * accuracy = (correct / (correct + errors)) * 100
+   * @param {number} correctChars - Number of correct characters typed
+   * @param {number} totalErrorsOrTotalChars - Total errors made, or total characters attempted
    */
-  static getAccuracy(correctChars, totalTypedChars) {
-    if (totalTypedChars <= 0) return 100;
-    const acc = (correctChars / totalTypedChars) * 100;
+  static getAccuracy(correctChars, totalErrorsOrTotalChars) {
+    if (correctChars <= 0 && totalErrorsOrTotalChars <= 0) return 100;
+    if (correctChars <= 0) return 0;
+
+    let total = 0;
+    if (totalErrorsOrTotalChars >= correctChars && totalErrorsOrTotalChars > 0) {
+      // Passed as total keystrokes (e.g. 47 where correct is 45)
+      total = totalErrorsOrTotalChars;
+    } else {
+      // Passed as error count (e.g. 2 where correct is 45)
+      total = correctChars + Math.max(0, totalErrorsOrTotalChars);
+    }
+
+    if (total <= 0) return 100;
+    const acc = (correctChars / total) * 100;
     return Math.min(100, Math.max(0, Math.round(acc * 10) / 10));
   }
 
