@@ -66,6 +66,8 @@ class TigerTypeApp {
     this.typingEngine = new TypingEngine(this.wordsContainer, this.caretRenderer, this.soundEngine);
     this.botRacer = new BotRacer("TigerBot", this.botSpeed);
     this.peerManager = new PeerManager();
+    this.remoteFinished = false;
+    this.isCountdownActive = false;
 
     this.init();
   }
@@ -148,9 +150,55 @@ class TigerTypeApp {
       this.typingWrapper.classList.remove("unfocused");
     });
 
-    // Keystrokes on typingInput
+    // Keystrokes on typingInput (Physical Desktop Keyboard)
     this.typingInput.addEventListener("keydown", (e) => {
+      if (this.isCountdownActive) {
+        e.preventDefault();
+        return;
+      }
       this.typingEngine.handleKeyDown(e);
+    });
+
+    // Mobile / Virtual keyboard input events (beforeinput & input for Android/iOS soft keyboards)
+    this.typingInput.addEventListener("beforeinput", (e) => {
+      if (this.isCountdownActive) {
+        e.preventDefault();
+        return;
+      }
+      if (e.inputType === "deleteContentBackward" || e.inputType === "deleteWordBackward") {
+        this.typingEngine.handleMobileInput("", e.inputType);
+      }
+    });
+
+    this.typingInput.addEventListener("input", (e) => {
+      if (this.isCountdownActive) {
+        this.typingInput.value = "";
+        return;
+      }
+      const val = this.typingInput.value;
+      if (val) {
+        this.typingEngine.handleMobileInput(val, e.inputType || "insertText");
+        this.typingInput.value = "";
+      }
+    });
+
+    // Mobile quick keyboard trigger pill
+    const mobileKbdPill = document.getElementById("mobile-keyboard-pill");
+    if (mobileKbdPill) {
+      mobileKbdPill.addEventListener("click", () => {
+        focusInput();
+      });
+      mobileKbdPill.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        focusInput();
+      });
+    }
+
+    // Touch listener directly on typing container for instant soft keyboard invocation on mobile
+    this.typingWrapper.addEventListener("pointerdown", (e) => {
+      if (!document.querySelector(".modal-overlay.active")) {
+        focusInput();
+      }
     });
 
     // Global keyboard handling & seamless auto-focus capture
@@ -531,6 +579,17 @@ class TigerTypeApp {
       const cpm = Metrics.getCPM(summary.correct, elapsed);
       const consistency = Metrics.getConsistency(this.speedTimeline);
 
+      // Determine race placement
+      let racePlacement = null;
+      if (this.isRaceMode) {
+        if (this.raceOpponentType === "peer") {
+          racePlacement = this.remoteFinished ? 2 : 1;
+          this.peerManager.broadcastFinish(netWpm, accuracy, elapsed);
+        } else if (this.raceOpponentType === "bot") {
+          racePlacement = this.botRacer.isFinished ? 2 : 1;
+        }
+      }
+
       const fullResult = {
         grossWpm,
         netWpm,
@@ -543,13 +602,9 @@ class TigerTypeApp {
         modeValue: this.modeValue,
         language: this.language,
         speedTimeline: this.speedTimeline,
-        errorTimeline: this.errorTimeline
+        errorTimeline: this.errorTimeline,
+        racePlacement
       };
-
-      // Broadcast finish to peer if multiplayer
-      if (this.isRaceMode && this.raceOpponentType === "peer") {
-        this.peerManager.broadcastFinish(netWpm, accuracy, elapsed);
-      }
 
       const { isNewPb } = StorageManager.saveTestResult(fullResult);
       this.modals.showResults(fullResult, isNewPb);
@@ -573,29 +628,43 @@ class TigerTypeApp {
       this.raceOpponentType = "peer";
       this.isRaceMode = true;
       this.raceSection.classList.add("active");
-      this.opponentNameDisplay.textContent = info.name || "raqib";
-      if (this.opponentAvatar) this.opponentAvatar.textContent = "";
       this.raceModeLabel.textContent = "do'st bilan poyga";
+      this.remoteFinished = false;
 
-      this.modals.updateLobbyConnected(info.name || "do'stingiz");
-
-      setTimeout(() => {
-        this.modals.closeAll();
-        this.typingInput.focus();
-      }, 1000);
-
-      if (info.isHost) {
-        // Generate seed and send to guest
-        const seed = Math.floor(Math.random() * 100000);
-        this.peerManager.send({
-          type: "RACE_CONFIG",
-          seed,
-          mode: this.mode,
-          modeValue: this.modeValue,
-          language: this.language
-        });
-        this.resetTest(seed);
+      if (!info.isHost) {
+        this.modals.updateLobbyConnected("Host");
       }
+    };
+
+    this.peerManager.onGuestJoined = (guestName) => {
+      this.opponentNameDisplay.textContent = guestName;
+      this.modals.updateLobbyConnected(guestName);
+
+      // Host generates words and transmits exact words array to guest
+      const wordCount = this.mode === "words" ? this.modeValue : Math.max(40, Math.ceil(this.modeValue * 2.5));
+      const seed = Math.floor(Math.random() * 100000);
+      const words = WordBank.generateWords(this.language, wordCount, seed, {
+        punctuation: this.hasPunctuation,
+        numbers: this.hasNumbers
+      });
+
+      this.typingEngine.loadWords(words, this.mode);
+      this._resetHUDState();
+
+      // Transmit RACE_CONFIG to guest
+      this.peerManager.send({
+        type: "RACE_CONFIG",
+        words,
+        mode: this.mode,
+        modeValue: this.modeValue,
+        language: this.language
+      });
+
+      // Synchronized countdown trigger
+      setTimeout(() => {
+        this.peerManager.send({ type: "START_COUNTDOWN" });
+        this._startSynchronizedCountdown();
+      }, 1000);
     };
 
     this.peerManager.onRaceStart = (config) => {
@@ -603,7 +672,15 @@ class TigerTypeApp {
       this.modeValue = config.modeValue;
       this.language = config.language;
       this._updateControlPillsUI();
-      this.resetTest(config.seed);
+      this._updateLanguageUI();
+
+      // Guest loads the exact same words
+      this.typingEngine.loadWords(config.words, this.mode);
+      this._resetHUDState();
+    };
+
+    this.peerManager.onCountdownStart = () => {
+      this._startSynchronizedCountdown();
     };
 
     this.peerManager.onRemoteProgress = (data) => {
@@ -611,12 +688,62 @@ class TigerTypeApp {
     };
 
     this.peerManager.onRemoteFinish = (data) => {
+      this.remoteFinished = true;
       this._updateOpponentTrack(1, data.finalWpm);
     };
 
     this.peerManager.onDisconnected = () => {
       this.leaveRace();
     };
+  }
+
+  _startSynchronizedCountdown() {
+    this.isCountdownActive = true;
+    this.remoteFinished = false;
+    this.modals.closeAll();
+
+    const overlay = document.getElementById("race-countdown-overlay");
+    const countNum = document.getElementById("countdown-num");
+    if (!overlay || !countNum) {
+      this.isCountdownActive = false;
+      this.typingInput.focus();
+      return;
+    }
+
+    overlay.style.display = "flex";
+    let count = 3;
+    countNum.textContent = count;
+    countNum.style.color = "var(--accent-gold)";
+
+    const interval = setInterval(() => {
+      count--;
+      if (count > 0) {
+        countNum.textContent = count;
+      } else if (count === 0) {
+        countNum.textContent = "START!";
+        countNum.style.color = "var(--accent-green)";
+      } else {
+        clearInterval(interval);
+        overlay.style.display = "none";
+        countNum.style.color = "";
+        this.isCountdownActive = false;
+        this.typingInput.focus();
+      }
+    }, 1000);
+  }
+
+  _resetHUDState() {
+    this._lastTimerDisplay = null;
+    this._lastWpm = null;
+    this._lastAcc = null;
+
+    if (this.hudTimer) {
+      this.hudTimer.textContent = this.mode === "time" ? this.modeValue : "0";
+    }
+    if (this.hudWpm) this.hudWpm.textContent = "0";
+    if (this.hudAcc) this.hudAcc.textContent = "100%";
+    this._updatePlayerTrack(0, 0);
+    this._updateOpponentTrack(0, 0);
   }
 
   startBotRace() {
@@ -634,6 +761,10 @@ class TigerTypeApp {
     this.isRaceMode = false;
     this.raceOpponentType = "none";
     this.raceSection.classList.remove("active");
+    this.remoteFinished = false;
+    this.isCountdownActive = false;
+    const overlay = document.getElementById("race-countdown-overlay");
+    if (overlay) overlay.style.display = "none";
     this.botRacer.stop();
     this.peerManager.disconnect();
     this.resetTest();
@@ -655,7 +786,15 @@ class TigerTypeApp {
   }
 
   joinPeerRoom(code) {
+    const errorMsgEl = document.getElementById("join-error-msg");
+    const joinBtn = document.getElementById("join-room-btn");
+    if (errorMsgEl) errorMsgEl.style.display = "none";
+
     if (!code) {
+      if (errorMsgEl) {
+        errorMsgEl.textContent = "Iltimos, xona kodini kiriting";
+        errorMsgEl.style.display = "block";
+      }
       const input = document.getElementById("join-room-input");
       if (input) input.focus();
       return;
@@ -673,11 +812,27 @@ class TigerTypeApp {
       }
     }
 
+    if (joinBtn) {
+      joinBtn.textContent = "ulanmoqda...";
+      joinBtn.disabled = true;
+    }
+
     this.peerManager.joinRoom(cleanCode).then(() => {
+      if (joinBtn) {
+        joinBtn.textContent = "kirish";
+        joinBtn.disabled = false;
+      }
       this.modals.closeAll();
       this.typingInput.focus();
     }).catch(err => {
-      console.warn("Xonaga ulanib bo'lmadi:", err);
+      if (joinBtn) {
+        joinBtn.textContent = "kirish";
+        joinBtn.disabled = false;
+      }
+      if (errorMsgEl) {
+        errorMsgEl.textContent = err.message || "Xonaga ulanib bo'lmadi. Kodni tekshiring.";
+        errorMsgEl.style.display = "block";
+      }
     });
   }
 
@@ -711,24 +866,8 @@ class TigerTypeApp {
     });
     this.typingEngine.loadWords(words, this.mode);
 
-    // Reset HUD
-    this._lastTimerDisplay = null;
-    this._lastWpm = null;
-    this._lastAcc = null;
-
-    if (this.hudTimer) {
-      this.hudTimer.textContent = this.mode === "time" ? this.modeValue : "0";
-    }
-    if (this.hudTimerLabel) {
-      this.hudTimerLabel.textContent = this.mode === "time" ? "sekund" : "soniya";
-    }
-    if (this.hudWpm) this.hudWpm.textContent = "0";
-    if (this.hudAcc) this.hudAcc.textContent = "100%";
-
-    // Reset Race tracks
-    this._updatePlayerTrack(0, 0);
-    this._updateOpponentTrack(0, 0);
-
+    // Reset HUD and Tracks
+    this._resetHUDState();
     this.typingInput.value = "";
   }
 

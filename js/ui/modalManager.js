@@ -113,6 +113,21 @@ export class ModalManager {
       pbBadge.style.display = isNewPb ? "inline-flex" : "none";
     }
 
+    const raceBadge = document.getElementById("res-race-badge");
+    if (raceBadge) {
+      if (stats.racePlacement === 1) {
+        raceBadge.textContent = "🏆 1-o'rin (G'olib)";
+        raceBadge.className = "race-winner-badge";
+        raceBadge.style.display = "inline-flex";
+      } else if (stats.racePlacement === 2) {
+        raceBadge.textContent = "🥈 2-o'rin";
+        raceBadge.className = "race-winner-badge runner-up";
+        raceBadge.style.display = "inline-flex";
+      } else {
+        raceBadge.style.display = "none";
+      }
+    }
+
     this.resultsModal.classList.add("active");
 
     // Render Canvas chart

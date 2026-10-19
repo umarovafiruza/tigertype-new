@@ -2,7 +2,8 @@
 <html lang="uz">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#121214">
   <title>TigerType — Minimalist Typing & Race</title>
   <link rel="icon" type="image/png" href="assets/logo.png">
   <link rel="apple-touch-icon" href="assets/logo.png">
@@ -147,9 +148,15 @@
         <span id="hud-acc" style="display: none;">100%</span>
       </section>
 
+      <!-- Race Synchronous Countdown Overlay -->
+      <div class="race-countdown-overlay" id="race-countdown-overlay" style="display: none;">
+        <span class="countdown-num" id="countdown-num">3</span>
+        <span class="countdown-hint">tayyorlaning...</span>
+      </div>
+
       <!-- Typing Container -->
       <main class="typing-wrapper" id="typing-wrapper" tabindex="0">
-        <input type="text" id="typing-input" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <input type="text" id="typing-input" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="text" enterkeyhint="done">
         
         <!-- Words View -->
         <div class="words-container" id="words-container">
@@ -161,6 +168,11 @@
           <span>yozishni boshlash uchun bu yerga bosing</span>
         </div>
       </main>
+
+      <!-- Mobile Keyboard Launch Pill (Quick touch action) -->
+      <button class="mobile-keyboard-pill" id="mobile-keyboard-pill" type="button">
+        <span>⌨️ klaviaturada yozish</span>
+      </button>
 
       <!-- Restart Bar -->
       <div class="restart-bar">
@@ -196,6 +208,9 @@
         </div>
         <div id="res-pb-badge" class="pb-badge" style="display: none;">
           yangi rekord
+        </div>
+        <div id="res-race-badge" class="race-winner-badge" style="display: none;">
+          🏆 1-o'rin
         </div>
         <button class="modal-close-btn">&times;</button>
       </div>
@@ -280,6 +295,7 @@
               <input type="text" id="join-room-input" class="clean-input" placeholder="xona kodi (masalan: tiger-abc123)">
               <button class="btn-ghost" id="join-room-btn" style="white-space: nowrap;">kirish</button>
             </div>
+            <div id="join-error-msg" class="join-error-text" style="display: none; color: var(--accent-red); font-size: 12px; margin-top: 8px; font-family: var(--font-mono);"></div>
           </div>
         </div>
 

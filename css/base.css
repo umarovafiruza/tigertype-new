@@ -36,11 +36,18 @@ input {
 .app-container {
   max-width: 1100px;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0 auto;
   padding: 36px 32px 32px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+}
+
+@media (max-width: 600px) {
+  .app-container {
+    padding: 16px 14px 20px;
+  }
 }
 
 .main-content {
@@ -53,12 +60,19 @@ input {
   margin: auto 0;
 }
 
+@media (max-width: 600px) {
+  .main-content {
+    margin: 8px 0;
+  }
+}
+
 /* Distraction-free Focus Mode (pure typography focus while typing) */
 .app-container.typing-active .app-header,
 .app-container.typing-active .controls-container,
 .app-container.typing-active .restart-bar,
 .app-container.typing-active .app-footer,
-.app-container.typing-active .lang-row {
+.app-container.typing-active .lang-row,
+.app-container.typing-active .mobile-keyboard-pill {
   opacity: 0;
   pointer-events: none;
   transition: opacity 280ms ease;
@@ -68,9 +82,18 @@ input {
 .app-container.typing-active:hover .controls-container,
 .app-container.typing-active:hover .restart-bar,
 .app-container.typing-active:hover .app-footer,
-.app-container.typing-active:hover .lang-row {
+.app-container.typing-active:hover .lang-row,
+.app-container.typing-active:hover .mobile-keyboard-pill {
   opacity: 1;
   pointer-events: auto;
+}
+
+@media (max-width: 600px) {
+  /* On touch devices, keep restart accessible with subtle opacity */
+  .app-container.typing-active .restart-bar {
+    opacity: 0.4;
+    pointer-events: auto;
+  }
 }
 
 .app-header,

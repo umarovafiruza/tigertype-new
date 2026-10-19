@@ -36,7 +36,9 @@ export class CaretRenderer {
 
     // Fast zero-reflow coordinate resolution relative to container
     let targetX = wordEl.offsetLeft + targetElement.offsetLeft;
-    const targetY = wordEl.offsetTop + 8; // optical vertical center (52px line height, 36px caret)
+    const wordHeight = wordEl.offsetHeight || 52;
+    const caretHeight = this.caret.offsetHeight || 34;
+    const targetY = wordEl.offsetTop + Math.max(0, Math.round((wordHeight - caretHeight) / 2));
 
     if (isEndOfWord) {
       targetX += targetElement.offsetWidth;

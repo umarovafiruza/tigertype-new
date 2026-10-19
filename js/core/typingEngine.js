@@ -119,10 +119,24 @@ export class TypingEngine {
     this.container.appendChild(fragment);
   }
 
+  normalizeChar(c) {
+    if (!c) return c;
+    // Normalize smart apostrophes, backticks, and modifier apostrophes to standard ASCII single quote
+    if (c === "’" || c === "‘" || c === "`" || c === "´" || c === "ʻ" || c === "ʼ") {
+      return "'";
+    }
+    return c;
+  }
+
   handleKeyDown(event) {
     if (this.isFinished) return;
 
     const key = event.key;
+
+    // Mobile / Virtual keyboard IME composition indicator: let beforeinput/input handle it!
+    if (key === "Unidentified" || event.keyCode === 229) {
+      return;
+    }
 
     // Prevent default scrolling on space or tab
     if (key === " " || key === "Tab") {
@@ -159,6 +173,39 @@ export class TypingEngine {
     }
   }
 
+  handleMobileInput(text, inputType = "") {
+    if (this.isFinished) return;
+
+    if (!this.isStarted) {
+      this.isStarted = true;
+      if (this.onStart) this.onStart();
+    }
+
+    if (inputType === "deleteContentBackward") {
+      this.handleBackspace(false);
+      this.soundEngine.playKeystroke("Backspace");
+      return;
+    }
+
+    if (inputType === "deleteWordBackward") {
+      this.handleBackspace(true);
+      this.soundEngine.playKeystroke("Backspace");
+      return;
+    }
+
+    if (text) {
+      for (const rawChar of text) {
+        if (rawChar === " ") {
+          this.handleSpace();
+          this.soundEngine.playKeystroke(" ");
+        } else {
+          this.handleCharacter(rawChar);
+          this.soundEngine.playKeystroke(rawChar);
+        }
+      }
+    }
+  }
+
   handleCharacter(char) {
     const currentWordEl = this.wordElements[this.wordIndex];
     if (!currentWordEl) return;
@@ -171,7 +218,10 @@ export class TypingEngine {
       const charEl = currentWordEl.children[this.charIndex];
       const expectedChar = targetWord[this.charIndex];
 
-      if (char === expectedChar) {
+      const normTyped = this.normalizeChar(char);
+      const normExpected = this.normalizeChar(expectedChar);
+
+      if (normTyped === normExpected) {
         charEl.className = "char correct";
         this.correctChars++;
       } else {
@@ -356,18 +406,27 @@ export class TypingEngine {
     }
   }
 
+  getLineHeight() {
+    if (this.wordElements.length > 0 && this.wordElements[0]) {
+      const h = this.wordElements[0].offsetHeight;
+      if (h > 12) return h;
+    }
+    return this.baseLineHeight || 52;
+  }
+
   checkLineScroll() {
     const currentWordEl = this.wordElements[this.wordIndex];
     if (!currentWordEl) return;
 
+    const lineHeight = this.getLineHeight();
     const currentOffsetTop = currentWordEl.offsetTop;
-    // Calculate target scroll position (1 line above current active word)
-    const targetScroll = currentOffsetTop > this.baseLineHeight
-      ? currentOffsetTop - this.baseLineHeight
+    // Calculate target scroll position (smoothly scroll when reaching second line)
+    const targetScroll = currentOffsetTop > (lineHeight * 0.7)
+      ? currentOffsetTop - (lineHeight * 0.7)
       : 0;
 
     // Only initiate smooth scroll if the line boundary actually shifted
-    if (this.lastTargetScroll !== targetScroll) {
+    if (Math.abs(this.lastTargetScroll - targetScroll) > 4) {
       this.lastTargetScroll = targetScroll;
       this.container.scrollTo({
         top: targetScroll,

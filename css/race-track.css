@@ -135,3 +135,14 @@
   transform: translateX(-50%);
   transition: left 100ms linear;
 }
+
+@media (max-width: 600px) {
+  .race-header-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .race-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
