@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const PORT = process.env.PORT || 3000;
 const BASE_DIR = __dirname;
@@ -64,6 +65,25 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`TigerType server running at http://localhost:${PORT}/`);
+server.listen(PORT, '0.0.0.0', () => {
+  const nets = os.networkInterfaces();
+  const ips = [];
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        ips.push(net.address);
+      }
+    }
+  }
+
+  console.log('\n🐯 ================================================');
+  console.log('   TigerType muvaffaqiyatli ishga tushdi!');
+  console.log('   ------------------------------------------------');
+  console.log(`   💻 Kompyuterda ochish:  http://localhost:${PORT}/`);
+  if (ips.length > 0) {
+    ips.forEach(ip => {
+      console.log(`   📱 Telefonda ochish:    http://${ip}:${PORT}/`);
+    });
+  }
+  console.log('================================================\n');
 });
