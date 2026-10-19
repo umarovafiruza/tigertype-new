@@ -20,6 +20,8 @@ export class PeerManager {
     this.onPeerReady = null;
     this.onConnected = null;
     this.onGuestJoined = null;
+    this.onRequestConfig = null;
+    this.onConfigAck = null;
     this.onCountdownStart = null;
     this.onRaceStart = null;
     this.onRemoteProgress = null;
@@ -65,18 +67,32 @@ export class PeerManager {
           this.isHost = true;
           this.connection = conn;
 
-          // Critical: Wait until incoming connection data channel is fully OPEN before transmitting
-          conn.on("open", () => {
-            this._setupConnectionHandlers(conn);
+          // 1. Immediately setup incoming message listeners so no incoming data is lost
+          this._setupConnectionHandlers(conn);
+
+          // 2. Handle open state safely whether already open or opening soon
+          const handleOpen = () => {
+            this.isConnected = true;
             this._flushSendQueue();
             if (this.onConnected) {
               this.onConnected({ isHost: true, peerId: conn.peer });
             }
-          });
+          };
+
+          if (conn.open) {
+            handleOpen();
+          } else {
+            conn.once("open", handleOpen);
+          }
         });
 
         this.peer.on("error", (err) => {
           console.error("PeerJS error:", err);
+          if (err.type === "unavailable-id") {
+            // ID already taken, retry with new random ID
+            this.init().then(resolve).catch(reject);
+            return;
+          }
           reject(err);
         });
       } catch (err) {
@@ -87,7 +103,14 @@ export class PeerManager {
 
   joinRoom(hostRoomId, playerName = "Challenger") {
     return new Promise((resolve, reject) => {
-      if (!this.peer || this.peer.destroyed) {
+      if (this.connection) {
+        try { this.connection.close(); } catch (e) {}
+        this.connection = null;
+      }
+      this.isConnected = false;
+      this.pendingSendQueue = [];
+
+      if (!this.peer || this.peer.destroyed || !this.peer.open) {
         this.init().then(() => {
           this._connectToHost(hostRoomId, playerName, resolve, reject);
         }).catch(reject);
@@ -126,13 +149,17 @@ export class PeerManager {
 
     try {
       const conn = this.peer.connect(hostRoomId, { reliable: true });
+      this.connection = conn;
 
-      conn.on("open", () => {
+      // 1. Immediately setup data handlers on guest too
+      this._setupConnectionHandlers(conn);
+
+      // 2. Handle open state
+      const handleOpen = () => {
         if (!isSettled) {
           isSettled = true;
           clearTimeout(timeoutId);
-          this.connection = conn;
-          this._setupConnectionHandlers(conn);
+          this.isConnected = true;
           this._flushSendQueue();
 
           // Send guest join info
@@ -143,7 +170,13 @@ export class PeerManager {
           }
           resolve(conn);
         }
-      });
+      };
+
+      if (conn.open) {
+        handleOpen();
+      } else {
+        conn.once("open", handleOpen);
+      }
 
       conn.on("error", (err) => {
         if (!isSettled) {
@@ -189,6 +222,18 @@ export class PeerManager {
         // Guest receives exact words and synchronized settings from host
         if (this.onRaceStart) {
           this.onRaceStart(msg);
+        }
+        break;
+
+      case "REQUEST_CONFIG":
+        if (this.onRequestConfig) {
+          this.onRequestConfig();
+        }
+        break;
+
+      case "CONFIG_ACK":
+        if (this.onConfigAck) {
+          this.onConfigAck();
         }
         break;
 

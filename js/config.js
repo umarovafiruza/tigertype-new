@@ -36,11 +36,13 @@ export const CONFIG = {
   DEFAULT_BOT_WPM: 65,
 
   PEER_CONFIG: {
-    debug: 0,
+    debug: 1,
     config: {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun.services.mozilla.com' }
       ]
     }
   }

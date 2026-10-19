@@ -11,6 +11,39 @@ import { BotRacer } from "./multiplayer/botRacer.js";
 import { PeerManager } from "./multiplayer/peerManager.js";
 
 /**
+ * Cross-platform clipboard copy helper with fallback for non-secure HTTP contexts
+ */
+function copyToClipboard(text, fallbackInput = null) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve, reject) => {
+    try {
+      if (fallbackInput && typeof fallbackInput.select === "function") {
+        fallbackInput.focus();
+        fallbackInput.select();
+        const ok = document.execCommand("copy");
+        if (ok) return resolve();
+      }
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      ta.style.top = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      if (ok) resolve();
+      else reject(new Error("Nusxalab bo'lmadi"));
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/**
  * TigerType Orchestrator
  */
 class TigerTypeApp {
@@ -68,6 +101,9 @@ class TigerTypeApp {
     this.peerManager = new PeerManager();
     this.remoteFinished = false;
     this.isCountdownActive = false;
+    this._countdownInterval = null;
+    this._lastRaceConfig = null;
+    this._guestReceivedConfig = false;
 
     this.init();
   }
@@ -427,12 +463,23 @@ class TigerTypeApp {
     });
 
     // Copy room link on race track
-    document.getElementById("copy-room-link-btn").addEventListener("click", () => {
-      if (this.peerManager.roomId) {
-        const url = `${window.location.origin}${window.location.pathname}?room=${this.peerManager.roomId}`;
-        navigator.clipboard.writeText(url);
-      }
-    });
+    const copyRaceBtn = document.getElementById("copy-room-link-btn");
+    if (copyRaceBtn) {
+      copyRaceBtn.addEventListener("click", () => {
+        if (this.peerManager.roomId) {
+          const url = `${window.location.origin}${window.location.pathname}?room=${this.peerManager.roomId}`;
+          copyToClipboard(url).then(() => {
+            const orig = copyRaceBtn.textContent;
+            copyRaceBtn.textContent = "nusxalandi!";
+            setTimeout(() => {
+              copyRaceBtn.textContent = orig;
+            }, 2000);
+          }).catch(() => {
+            prompt("Ushbu xona havolasidan nusxa oling:", url);
+          });
+        }
+      });
+    }
 
     // Host room button
     document.getElementById("create-room-btn").addEventListener("click", () => {
@@ -462,11 +509,13 @@ class TigerTypeApp {
     if (lobbyCopyCodeBtn) {
       lobbyCopyCodeBtn.addEventListener("click", () => {
         if (this.peerManager.roomId) {
-          navigator.clipboard.writeText(this.peerManager.roomId).then(() => {
+          copyToClipboard(this.peerManager.roomId).then(() => {
             lobbyCopyCodeBtn.textContent = "nusxalandi";
             setTimeout(() => {
               lobbyCopyCodeBtn.textContent = "nusxalash";
             }, 2000);
+          }).catch(() => {
+            prompt("Xona kodi:", this.peerManager.roomId);
           });
         }
       });
@@ -478,11 +527,13 @@ class TigerTypeApp {
       lobbyCopyLinkBtn.addEventListener("click", () => {
         const linkInput = document.getElementById("lobby-room-link-input");
         if (linkInput && linkInput.value) {
-          navigator.clipboard.writeText(linkInput.value).then(() => {
+          copyToClipboard(linkInput.value, linkInput).then(() => {
             lobbyCopyLinkBtn.textContent = "nusxalandi";
             setTimeout(() => {
               lobbyCopyLinkBtn.textContent = "nusxalash";
             }, 2000);
+          }).catch(() => {
+            prompt("Xona havolasi:", linkInput.value);
           });
         }
       });
@@ -650,7 +701,15 @@ class TigerTypeApp {
       this.remoteFinished = false;
 
       if (!info.isHost) {
-        this.modals.updateLobbyConnected("Host");
+        this.opponentNameDisplay.textContent = "Mezbon";
+        this.modals.updateLobbyConnected("Mezbon");
+
+        // Self-healing check: if guest hasn't received config after 1200ms, request it again
+        setTimeout(() => {
+          if (!this._guestReceivedConfig && this.peerManager.isConnected) {
+            this.peerManager.send({ type: "REQUEST_CONFIG" });
+          }
+        }, 1200);
       }
     };
 
@@ -669,32 +728,53 @@ class TigerTypeApp {
       this.typingEngine.loadWords(words, this.mode);
       this._resetHUDState();
 
-      // Transmit RACE_CONFIG to guest
-      this.peerManager.send({
+      // Cache race config for potential re-transmission
+      this._lastRaceConfig = {
         type: "RACE_CONFIG",
+        hostName: "Mezbon",
         words,
         mode: this.mode,
         modeValue: this.modeValue,
         language: this.language
-      });
+      };
 
-      // Synchronized countdown trigger
+      // Transmit RACE_CONFIG to guest
+      this.peerManager.send(this._lastRaceConfig);
+
+      // Synchronized countdown trigger after short delay so guest UI stabilizes
       setTimeout(() => {
-        this.peerManager.send({ type: "START_COUNTDOWN" });
-        this._startSynchronizedCountdown();
-      }, 1000);
+        if (this.peerManager.isConnected) {
+          this.peerManager.send({ type: "START_COUNTDOWN" });
+          this._startSynchronizedCountdown();
+        }
+      }, 1200);
+    };
+
+    this.peerManager.onRequestConfig = () => {
+      if (this._lastRaceConfig && this.peerManager.isConnected) {
+        this.peerManager.send(this._lastRaceConfig);
+      }
+    };
+
+    this.peerManager.onConfigAck = () => {
+      // Guest confirmed receipt of words
     };
 
     this.peerManager.onRaceStart = (config) => {
+      this._guestReceivedConfig = true;
       this.mode = config.mode;
       this.modeValue = config.modeValue;
       this.language = config.language;
+      this.opponentNameDisplay.textContent = config.hostName || "Mezbon";
       this._updateControlPillsUI();
       this._updateLanguageUI();
 
       // Guest loads the exact same words
       this.typingEngine.loadWords(config.words, this.mode);
       this._resetHUDState();
+
+      // Acknowledge receipt
+      this.peerManager.send({ type: "CONFIG_ACK" });
     };
 
     this.peerManager.onCountdownStart = () => {
@@ -716,6 +796,11 @@ class TigerTypeApp {
   }
 
   _startSynchronizedCountdown() {
+    if (this._countdownInterval) {
+      clearInterval(this._countdownInterval);
+      this._countdownInterval = null;
+    }
+
     this.isCountdownActive = true;
     this.remoteFinished = false;
     this.modals.closeAll();
@@ -733,7 +818,7 @@ class TigerTypeApp {
     countNum.textContent = count;
     countNum.style.color = "var(--accent-gold)";
 
-    const interval = setInterval(() => {
+    this._countdownInterval = setInterval(() => {
       count--;
       if (count > 0) {
         countNum.textContent = count;
@@ -741,7 +826,8 @@ class TigerTypeApp {
         countNum.textContent = "START!";
         countNum.style.color = "var(--accent-green)";
       } else {
-        clearInterval(interval);
+        clearInterval(this._countdownInterval);
+        this._countdownInterval = null;
         overlay.style.display = "none";
         countNum.style.color = "";
         this.isCountdownActive = false;
@@ -781,6 +867,12 @@ class TigerTypeApp {
     this.raceSection.classList.remove("active");
     this.remoteFinished = false;
     this.isCountdownActive = false;
+    this._guestReceivedConfig = false;
+    this._lastRaceConfig = null;
+    if (this._countdownInterval) {
+      clearInterval(this._countdownInterval);
+      this._countdownInterval = null;
+    }
     const overlay = document.getElementById("race-countdown-overlay");
     if (overlay) overlay.style.display = "none";
     this.botRacer.stop();
@@ -789,7 +881,18 @@ class TigerTypeApp {
   }
 
   createPeerRoom() {
+    const createBtn = document.getElementById("create-room-btn");
+    const origText = createBtn ? createBtn.textContent : "xona yaratish";
+    if (createBtn) {
+      createBtn.textContent = "xona ochilmoqda...";
+      createBtn.disabled = true;
+    }
+
     this.peerManager.init().then((roomId) => {
+      if (createBtn) {
+        createBtn.textContent = origText;
+        createBtn.disabled = false;
+      }
       this.isRaceMode = true;
       this.raceOpponentType = "peer";
       this.raceSection.classList.add("active");
@@ -799,8 +902,45 @@ class TigerTypeApp {
       const fullUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
       this.modals.showRoomLobby(roomId, fullUrl);
     }).catch(err => {
+      if (createBtn) {
+        createBtn.textContent = origText;
+        createBtn.disabled = false;
+      }
       console.warn("Xona yaratishda xatolik:", err);
+      alert("Xona yaratib bo'lmadi: " + (err.message || "Internet aloqasini tekshiring"));
     });
+  }
+
+  _parseRoomCode(input) {
+    if (!input || typeof input !== "string") return "";
+    let code = input.trim();
+
+    // Check if it's a URL
+    if (code.includes("room=")) {
+      try {
+        const url = new URL(code, window.location.origin);
+        const r = url.searchParams.get("room");
+        if (r) code = r.trim();
+      } catch (e) {
+        const match = code.match(/room=([^&#\s]+)/);
+        if (match) code = match[1];
+      }
+    }
+
+    // Strip leading hash
+    if (code.startsWith("#")) {
+      code = code.slice(1).trim();
+    }
+
+    // Remove internal spaces if user typed "tiger- abc123"
+    code = code.replace(/\s+/g, "").toLowerCase();
+
+    // If user just typed the raw suffix e.g. "abc123" without "tiger-"
+    if (!code.startsWith("tiger-") && /^[a-z0-9]{4,12}$/i.test(code)) {
+      code = `tiger-${code}`;
+    }
+
+    return code;
   }
 
   joinPeerRoom(code) {
@@ -808,7 +948,8 @@ class TigerTypeApp {
     const joinBtn = document.getElementById("join-room-btn");
     if (errorMsgEl) errorMsgEl.style.display = "none";
 
-    if (!code) {
+    const cleanCode = this._parseRoomCode(code);
+    if (!cleanCode) {
       if (errorMsgEl) {
         errorMsgEl.textContent = "Iltimos, xona kodini kiriting";
         errorMsgEl.style.display = "block";
@@ -818,22 +959,17 @@ class TigerTypeApp {
       return;
     }
 
-    let cleanCode = code.trim();
-    if (cleanCode.startsWith("#")) cleanCode = cleanCode.slice(1);
-    if (cleanCode.includes("room=")) {
-      try {
-        const url = new URL(cleanCode, window.location.origin);
-        cleanCode = url.searchParams.get("room") || cleanCode;
-      } catch (e) {
-        const match = cleanCode.match(/room=([^&]+)/);
-        if (match) cleanCode = match[1];
-      }
-    }
-
     if (joinBtn) {
       joinBtn.textContent = "ulanmoqda...";
       joinBtn.disabled = true;
     }
+
+    this.isRaceMode = true;
+    this.raceOpponentType = "peer";
+    this.raceSection.classList.add("active");
+    this.raceModeLabel.textContent = "do'st bilan poyga";
+    this.raceRoomCodeTag.textContent = `#${cleanCode}`;
+    this.opponentNameDisplay.textContent = "Mezbon";
 
     this.peerManager.joinRoom(cleanCode).then(() => {
       if (joinBtn) {
@@ -851,6 +987,11 @@ class TigerTypeApp {
         errorMsgEl.textContent = err.message || "Xonaga ulanib bo'lmadi. Kodni tekshiring.";
         errorMsgEl.style.display = "block";
       }
+      if (!this.peerManager.isConnected) {
+        this.raceSection.classList.remove("active");
+        this.isRaceMode = false;
+        this.raceOpponentType = "none";
+      }
     });
   }
 
@@ -858,9 +999,14 @@ class TigerTypeApp {
     const params = new URLSearchParams(window.location.search);
     const room = params.get("room");
     if (room) {
+      try {
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      } catch (e) {}
+
       setTimeout(() => {
         this.joinPeerRoom(room);
-      }, 500);
+      }, 400);
     }
   }
 
