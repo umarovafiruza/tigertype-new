@@ -155,12 +155,14 @@ export class TypingEngine {
     }
 
     if (key === "Backspace") {
+      if (event && typeof event.preventDefault === "function") event.preventDefault();
       this.handleBackspace(event.ctrlKey || event.metaKey);
       this.soundEngine.playKeystroke("Backspace");
       return;
     }
 
     if (key === " ") {
+      if (event && typeof event.preventDefault === "function") event.preventDefault();
       this.handleSpace();
       this.soundEngine.playKeystroke(" ");
       return;
@@ -168,6 +170,7 @@ export class TypingEngine {
 
     // Only process printable single characters
     if (key.length === 1) {
+      if (event && typeof event.preventDefault === "function") event.preventDefault();
       this.handleCharacter(key);
       this.soundEngine.playKeystroke(key);
     }

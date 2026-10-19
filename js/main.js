@@ -150,19 +150,31 @@ class TigerTypeApp {
       this.typingWrapper.classList.remove("unfocused");
     });
 
+    let lastKeydownTime = 0;
+
     // Keystrokes on typingInput (Physical Desktop Keyboard)
     this.typingInput.addEventListener("keydown", (e) => {
       if (this.isCountdownActive) {
         e.preventDefault();
         return;
       }
-      this.typingEngine.handleKeyDown(e);
+      if (e.key === "Unidentified" || e.keyCode === 229) {
+        return;
+      }
+      if (e.key.length === 1 || e.key === "Backspace" || e.key === " ") {
+        lastKeydownTime = performance.now();
+        this.typingEngine.handleKeyDown(e);
+      }
     });
 
     // Mobile / Virtual keyboard input events (beforeinput & input for Android/iOS soft keyboards)
     this.typingInput.addEventListener("beforeinput", (e) => {
       if (this.isCountdownActive) {
         e.preventDefault();
+        return;
+      }
+      // If a physical keydown just handled this within 50ms, do NOT double-process!
+      if (performance.now() - lastKeydownTime < 50) {
         return;
       }
       if (e.inputType === "deleteContentBackward" || e.inputType === "deleteWordBackward") {
@@ -172,6 +184,11 @@ class TigerTypeApp {
 
     this.typingInput.addEventListener("input", (e) => {
       if (this.isCountdownActive) {
+        this.typingInput.value = "";
+        return;
+      }
+      // If a physical keydown just handled this within 50ms, do NOT double-process!
+      if (performance.now() - lastKeydownTime < 50) {
         this.typingInput.value = "";
         return;
       }
@@ -233,8 +250,9 @@ class TigerTypeApp {
         if (e.ctrlKey || e.metaKey || e.altKey) {
           return;
         }
-        if (e.key.length === 1 || e.key === "Backspace") {
+        if (e.key.length === 1 || e.key === "Backspace" || e.key === " ") {
           focusInput();
+          lastKeydownTime = performance.now();
           this.typingEngine.handleKeyDown(e);
           e.preventDefault();
         }
